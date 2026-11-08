@@ -1,6 +1,10 @@
+import { homedir } from "node:os";
+import { join } from "node:path";
+
 export type Config = {
   port: number;
   webhookPathSecret: string;
+  dashboardPathSecret: string | undefined;
   sendblueApiKeyId: string;
   sendblueApiKeySecret: string;
   sendblueFromNumber: string;
@@ -9,6 +13,7 @@ export type Config = {
   piCli: string;
   agentCwd: string;
   sessionDir: string;
+  mcpConfigPath: string;
   agentTimeoutMs: number;
   piProvider: string | undefined;
   piModel: string | undefined;
@@ -28,6 +33,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   return {
     port: Number(env.PORT ?? 8080),
     webhookPathSecret: requiredFrom(env, "WEBHOOK_PATH_SECRET"),
+    dashboardPathSecret: emptyToUndefined(env.DASHBOARD_SECRET),
     sendblueApiKeyId: requiredFrom(env, "SENDBLUE_API_KEY_ID"),
     sendblueApiKeySecret: requiredFrom(env, "SENDBLUE_API_KEY_SECRET"),
     sendblueFromNumber: normalizePhone(requiredFrom(env, "SENDBLUE_FROM_NUMBER")) ??
@@ -37,6 +43,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     piCli: env.PI_CLI?.trim() || "pi",
     agentCwd: env.AGENT_CWD?.trim() || "/home/sprite/agent",
     sessionDir: env.SESSION_DIR?.trim() || "/home/sprite/agent/sessions",
+    mcpConfigPath: env.MCP_CONFIG_PATH?.trim() || join(homedir(), ".pi/agent/mcp.json"),
     agentTimeoutMs: Number(env.AGENT_TIMEOUT_MS ?? 600_000),
     piProvider: emptyToUndefined(env.PI_PROVIDER),
     piModel: emptyToUndefined(env.PI_MODEL),

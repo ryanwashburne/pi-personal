@@ -9,6 +9,7 @@ import { createGateway, webhookPath } from "./webhook";
 const config: Config = {
   port: 8080,
   webhookPathSecret: "path-secret",
+  dashboardPathSecret: undefined,
   sendblueApiKeyId: "id",
   sendblueApiKeySecret: "secret",
   sendblueFromNumber: "+15551111111",
@@ -17,6 +18,7 @@ const config: Config = {
   piCli: "pi",
   agentCwd: "/tmp",
   sessionDir: "/tmp",
+  mcpConfigPath: "/tmp/mcp.json",
   agentTimeoutMs: 1000,
   piProvider: undefined,
   piModel: undefined,
@@ -39,6 +41,7 @@ async function setup() {
         prompts.push(message);
         return "got it";
       },
+      async restart() {},
       async stop() {},
     },
     dedupe: await createDedupe(join(dir, "processed.json")),

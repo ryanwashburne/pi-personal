@@ -80,6 +80,12 @@ export WEBHOOK_URL="${URL%/}/webhooks/sendblue/${WEBHOOK_PATH_SECRET}"
 echo
 echo "Webhook URL:"
 echo "  $WEBHOOK_URL"
+if [[ -n "${DASHBOARD_SECRET:-}" ]]; then
+  echo "Settings dashboard:"
+  echo "  ${URL%/}/settings/${DASHBOARD_SECRET}"
+else
+  echo "Settings dashboard: off (set DASHBOARD_SECRET in .env to enable)"
+fi
 echo
 
 if [[ "${REGISTER_WEBHOOK:-}" == "1" ]]; then
