@@ -26,13 +26,16 @@ Fill `.env` (this file is gitignored):
 - Sendblue API key/secret and `SENDBLUE_FROM_NUMBER`
 - `ALLOWED_PHONE` — your number, E.164
 - `WEBHOOK_PATH_SECRET` and `SENDBLUE_WEBHOOK_SECRET` — long random strings
+- `DASHBOARD_SECRET` — long random string for the settings page (optional; omit to disable it)
 - a model key (`OPENROUTER_API_KEY`, `ANTHROPIC_API_KEY`, …)
 
 ```bash
 ./scripts/provision.sh
 ```
 
-That creates Sprite `pi-personal`, copies this repo onto it, installs `gateway` as the HTTP service, and prints the public webhook URL. Re-run with `REGISTER_WEBHOOK=1` to append that URL on your Sendblue account, or paste it in the Sendblue dashboard yourself.
+That creates Sprite `pi-personal`, copies this repo onto it, installs `gateway` as the HTTP service, and prints the public webhook URL and settings page. Re-run with `REGISTER_WEBHOOK=1` to append that URL on your Sendblue account, or paste it in the Sendblue dashboard yourself.
+
+The Sprite already hosts HTTP on port 8080. The settings page is the same public `*.sprites.app` URL, at `/settings/$DASHBOARD_SECRET`. Open it in a browser to add an HTTP MCP server (your URL, optional bearer token). Do not share that link; it is the only auth on the page. The webhook path stays separate so Sendblue never sees the dashboard secret.
 
 First-time Pi login on the Sprite:
 
@@ -71,4 +74,4 @@ The gateway can also run on your laptop (`bun start`) with the same `.env` if yo
 - `agent/sessions/` and `agent/state/` (conversation history)
 - Pi `auth.json` / provider credentials
 
-Access control for the live agent is the unguessable webhook path, the Sendblue signing secret, and the phone allowlist in `.env`. Sendblue keys stay in the gateway. Pi does not get a “text anyone” tool.
+Access control for the live agent is the unguessable webhook path, the Sendblue signing secret, the phone allowlist in `.env`, and the unguessable settings path. Sendblue keys stay in the gateway. Pi does not get a “text anyone” tool.

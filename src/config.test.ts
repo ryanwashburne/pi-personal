@@ -19,6 +19,12 @@ test("loadConfig requires allowlisted phone", () => {
   const config = loadConfig(base);
   expect(config.allowedPhone).toBe("+15553334444");
   expect(config.port).toBe(8080);
+  expect(config.dashboardPathSecret).toBeUndefined();
+});
+
+test("loadConfig reads an optional dashboard secret", () => {
+  const config = loadConfig({ ...base, DASHBOARD_SECRET: "dash-secret" });
+  expect(config.dashboardPathSecret).toBe("dash-secret");
 });
 
 test("loadConfig throws when required values are missing", () => {

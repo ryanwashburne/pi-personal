@@ -1,21 +1,19 @@
 import { join } from "node:path";
 import { normalizePhone, type Config } from "./config";
+import { handleDashboard } from "./dashboard";
 import { createDedupe, type Dedupe } from "./dedupe";
 import { promptFromInbound, parseInbound } from "./inbound";
 import type { PiAgent } from "./pi";
+import type { GatewayResult } from "./result";
 import { headerValue, secretsEqual } from "./secret";
 import type { SendblueClient } from "./sendblue";
 import { splitMessage } from "./split";
 import { holdSprite, type Hold } from "./tasks";
 
-export type WebhookResult = {
-  status: number;
-  body: string;
-  work?: () => Promise<void>;
-};
+export type WebhookResult = GatewayResult;
 
 export type Gateway = {
-  handle: (request: Request) => Promise<WebhookResult>;
+  handle: (request: Request) => Promise<GatewayResult>;
 };
 
 type GatewayOptions = {
@@ -38,6 +36,11 @@ export async function createGateway(options: GatewayOptions): Promise<Gateway> {
       if (request.method === "GET" && url.pathname === "/health") {
         return { status: 200, body: "ok" };
       }
+      const dashboard = await handleDashboard(request, {
+        config: options.config,
+        pi: options.pi,
+      });
+      if (dashboard) return dashboard;
       if (request.method !== "POST" || url.pathname !== webhookPath(options.config)) {
         return { status: 404, body: "not found" };
       }

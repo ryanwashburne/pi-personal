@@ -12,6 +12,7 @@ type RpcResponse = {
 
 export type PiAgent = {
   prompt: (message: string) => Promise<string>;
+  restart: () => Promise<void>;
   stop: () => Promise<void>;
 };
 
@@ -53,7 +54,7 @@ export function createPiAgent(config: Config): PiAgent {
       "--system-prompt",
       `${config.agentCwd}/SYSTEM.md`,
       "--tools",
-      "read,bash,edit,write,grep,find,ls",
+      "read,bash,edit,write,grep,find,ls,mcp__*",
     ];
     if (config.piProvider) args.push("--provider", config.piProvider);
     if (config.piModel) args.push("--model", config.piModel);
@@ -190,14 +191,17 @@ export function createPiAgent(config: Config): PiAgent {
     }
   }
 
+  async function stop() {
+    const proc = child;
+    child = undefined;
+    starting = undefined;
+    proc?.kill("SIGTERM");
+  }
+
   return {
     prompt: enqueue,
-    async stop() {
-      const proc = child;
-      child = undefined;
-      starting = undefined;
-      proc?.kill("SIGTERM");
-    },
+    restart: stop,
+    stop,
   };
 }
 
