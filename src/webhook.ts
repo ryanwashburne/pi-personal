@@ -79,15 +79,16 @@ export async function createGateway(options: GatewayOptions): Promise<Gateway> {
         status: 200,
         body: "ok",
         work: async () => {
-          const task = await hold();
-          const heartbeat = setInterval(() => {
-            void task.heartbeat().catch((error) => console.warn("task heartbeat failed", error));
-          }, 60_000);
+          console.log(`work ${inbound.messageHandle} from ${from}: ${inbound.content.slice(0, 80)}`);
+          const taskP = hold().catch((error) => {
+            console.warn("task hold failed", error);
+            return { async heartbeat() {}, async release() {} };
+          });
           try {
-            await options.sendblue.sendTyping(from).catch((error) => {
+            void options.sendblue.sendTyping(from).catch((error) => {
               console.warn("typing failed", error);
             });
-            console.log(`prompt ${inbound.messageHandle} from ${from}: ${inbound.content.slice(0, 80)}`);
+            console.log(`prompt ${inbound.messageHandle}`);
             const reply = await options.pi.prompt(promptFromInbound(inbound));
             console.log(`reply ${inbound.messageHandle} (${reply.length} chars)`);
             const chunks = splitMessage(reply);
@@ -101,8 +102,8 @@ export async function createGateway(options: GatewayOptions): Promise<Gateway> {
               .sendMessage(from, "I hit an error working on that. Try me again in a minute.")
               .catch((sendError) => console.error("error reply failed", sendError));
           } finally {
-            clearInterval(heartbeat);
             inFlight.delete(inbound.messageHandle);
+            const task = await taskP;
             await task.release().catch((error) => console.warn("task release failed", error));
           }
         },

@@ -7,24 +7,31 @@ export type Hold = {
   release: () => Promise<void>;
 };
 
+const noopHold: Hold = {
+  async heartbeat() {},
+  async release() {},
+};
+
 export async function holdSprite(name = "agent"): Promise<Hold> {
   if (!existsSync(SOCKET)) {
-    return {
-      async heartbeat() {},
-      async release() {},
-    };
+    return noopHold;
   }
 
-  await spriteRequest("PUT", `/v1/tasks/${name}`, { expire: "5m" }).catch(async () => {
-    await spriteRequest("POST", "/v1/tasks", { name, expire: "5m" });
-  });
+  try {
+    await spriteRequest("PUT", `/v1/tasks/${name}`, { expire: "5m" }).catch(async () => {
+      await spriteRequest("POST", "/v1/tasks", { name, expire: "5m" });
+    });
+  } catch (error) {
+    console.warn("task hold failed; continuing anyway", error);
+    return noopHold;
+  }
 
   return {
     async heartbeat() {
       await spriteRequest("PUT", `/v1/tasks/${name}`, { expire: "5m" });
     },
     async release() {
-      await spriteRequest("DELETE", `/v1/tasks/${name}`);
+      await spriteRequest("DELETE", `/v1/tasks/${name}`).catch(() => {});
     },
   };
 }
@@ -33,6 +40,8 @@ async function spriteRequest(method: string, path: string, body?: Record<string,
   const args = [
     "curl",
     "-sS",
+    "--max-time",
+    "2",
     "-o",
     "/tmp/pi-personal-task-body",
     "-w",
@@ -54,7 +63,7 @@ async function spriteRequest(method: string, path: string, body?: Record<string,
     proc.exited,
   ]);
   if (exitCode !== 0) {
-    throw new Error(`sprite ${method} ${path} failed: ${stderr || stdout}`);
+    throw new Error(`sprite ${method} ${path} failed: ${stderr || stdout || `exit ${exitCode}`}`);
   }
   const status = Number(stdout.trim());
   if (status >= 400 && status !== 404) {

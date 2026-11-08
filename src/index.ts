@@ -17,8 +17,14 @@ const server = Bun.serve({
     const url = new URL(request.url);
     const result = await gateway.handle(request);
     console.log(`${request.method} ${url.pathname} -> ${result.status} ${result.body}`);
+    // Await the turn while the webhook connection is still open. That HTTP
+    // activity is what keeps a Sprite from sleeping; a background promise does not.
     if (result.work) {
-      void result.work().catch((error) => console.error("background work failed", error));
+      try {
+        await result.work();
+      } catch (error) {
+        console.error("agent work failed", error);
+      }
     }
     return new Response(result.body, { status: result.status });
   },

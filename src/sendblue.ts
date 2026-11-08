@@ -10,6 +10,7 @@ export type SendblueClient = {
 export function createSendblueClient(config: Config): SendblueClient {
   const headers = {
     "Content-Type": "application/json",
+    "User-Agent": "pi-personal/1.0",
     "sb-api-key-id": config.sendblueApiKeyId,
     "sb-api-secret-key": config.sendblueApiKeySecret,
   };
@@ -23,6 +24,7 @@ export function createSendblueClient(config: Config): SendblueClient {
           number: to,
           from_number: config.sendblueFromNumber,
         }),
+        signal: AbortSignal.timeout(5000),
       });
       if (!response.ok) {
         console.warn(`typing indicator failed: ${response.status} ${await response.text()}`);
@@ -39,6 +41,7 @@ export function createSendblueClient(config: Config): SendblueClient {
         method: "POST",
         headers,
         body: JSON.stringify(body),
+        signal: AbortSignal.timeout(15000),
       });
       if (!response.ok) {
         throw new Error(`send-message failed: ${response.status} ${await response.text()}`);
