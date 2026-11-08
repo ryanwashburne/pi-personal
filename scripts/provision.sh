@@ -1,0 +1,114 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT"
+
+SPRITE_NAME="${SPRITE_NAME:-pi-personal}"
+REMOTE_APP="/home/sprite/pi-personal"
+REMOTE_AGENT="/home/sprite/agent"
+
+if [[ ! -f .env ]]; then
+  echo "Create .env from .env.example first." >&2
+  exit 1
+fi
+
+set -a
+# shellcheck disable=SC1091
+source .env
+set +a
+
+: "${WEBHOOK_PATH_SECRET:?WEBHOOK_PATH_SECRET must be set in .env}"
+: "${SENDBLUE_API_KEY_ID:?}"
+: "${SENDBLUE_API_KEY_SECRET:?}"
+: "${SENDBLUE_WEBHOOK_SECRET:?}"
+
+if ! command -v sprite >/dev/null 2>&1; then
+  echo "sprite CLI not found. Run ./scripts/install-clis.sh then sprite login." >&2
+  exit 1
+fi
+
+if ! sprite list >/dev/null 2>&1; then
+  echo "sprite is installed but not logged in. Run: sprite login" >&2
+  exit 1
+fi
+
+if sprite list | grep -q "$SPRITE_NAME"; then
+  echo "Using existing Sprite $SPRITE_NAME"
+else
+  echo "Creating Sprite $SPRITE_NAME"
+  sprite create "$SPRITE_NAME"
+fi
+
+sprite use "$SPRITE_NAME"
+
+echo "Uploading gateway and agent files..."
+sprite exec -- mkdir -p "$REMOTE_APP" "$REMOTE_AGENT"
+tar -czf - \
+  --exclude .git \
+  --exclude node_modules \
+  --exclude .env \
+  --exclude agent/sessions \
+  --exclude agent/state \
+  src package.json tsconfig.json agent scripts README.md |
+  sprite exec -- tar -xzf - -C "$REMOTE_APP"
+
+sprite exec -- bash -lc "rm -rf $REMOTE_AGENT && mkdir -p $REMOTE_AGENT && cp -R $REMOTE_APP/agent/. $REMOTE_AGENT/"
+sprite exec -- bash -lc "cat > $REMOTE_APP/.env" < .env
+sprite exec -- bash -lc "grep -q AGENT_CWD= $REMOTE_APP/.env || echo AGENT_CWD=$REMOTE_AGENT >> $REMOTE_APP/.env"
+
+echo "Installing gateway as a Sprite service..."
+sprite exec -- bash -lc "sprite-env services get gateway >/dev/null 2>&1 && sprite-env services delete gateway || true"
+sprite exec -- sprite-env services create gateway \
+  --cmd bun \
+  --args src/index.ts \
+  --dir "$REMOTE_APP" \
+  --http-port 8080
+
+echo "Making the Sprite URL public so Sendblue can reach it..."
+sprite config update --url-auth public
+
+INFO="$(sprite info)"
+echo "$INFO"
+URL="$(printf '%s\n' "$INFO" | grep -Eo 'https://[^ ]+\.sprites\.app' | head -n 1 || true)"
+if [[ -z "$URL" ]]; then
+  echo "Could not parse Sprite URL from sprite info. Copy it from the output above." >&2
+  exit 1
+fi
+
+export WEBHOOK_URL="${URL%/}/webhooks/sendblue/${WEBHOOK_PATH_SECRET}"
+echo
+echo "Webhook URL:"
+echo "  $WEBHOOK_URL"
+echo
+
+if [[ "${REGISTER_WEBHOOK:-}" == "1" ]]; then
+  echo "Registering Sendblue receive webhook..."
+  curl -sS -X POST "https://api.sendblue.com/api/account/webhooks" \
+    -H "sb-api-key-id: $SENDBLUE_API_KEY_ID" \
+    -H "sb-api-secret-key: $SENDBLUE_API_KEY_SECRET" \
+    -H "Content-Type: application/json" \
+    -d "$(python3 - <<'PY'
+import json, os
+print(json.dumps({
+  "type": "receive",
+  "webhooks": [{
+    "url": os.environ["WEBHOOK_URL"],
+    "secret": os.environ["SENDBLUE_WEBHOOK_SECRET"],
+  }],
+}))
+PY
+)"
+  echo
+else
+  echo "Point Sendblue's receive webhook at that URL with secret SENDBLUE_WEBHOOK_SECRET."
+  echo "Or re-run with REGISTER_WEBHOOK=1 ./scripts/provision.sh"
+fi
+
+echo
+echo "If Pi is not authenticated yet:"
+echo "  sprite console -s $SPRITE_NAME"
+echo "  pi auth login anthropic --api-key"
+echo
+echo "Then text $SENDBLUE_FROM_NUMBER from $ALLOWED_PHONE."
+echo "Watch logs with: sprite exec -- tail -f /.sprite/logs/services/gateway.log"

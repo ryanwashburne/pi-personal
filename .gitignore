@@ -1,0 +1,24 @@
+# secrets and local runtime
+.env
+.env.*
+!.env.example
+auth.json
+credentials.json
+**/.sendblue/
+
+# Fly Sprites CLI local selection (org + sprite names)
+.sprite
+.sprites/
+
+# Pi / gateway state on disk
+agent/sessions/
+agent/state/
+.pi/
+
+# deps and junk
+node_modules/
+.DS_Store
+._*
+*.log
+*.pem
+*.key

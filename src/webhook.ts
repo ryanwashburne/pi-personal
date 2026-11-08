@@ -1,0 +1,116 @@
+import { join } from "node:path";
+import { normalizePhone, type Config } from "./config";
+import { createDedupe, type Dedupe } from "./dedupe";
+import { promptFromInbound, parseInbound } from "./inbound";
+import type { PiAgent } from "./pi";
+import { headerValue, secretsEqual } from "./secret";
+import type { SendblueClient } from "./sendblue";
+import { splitMessage } from "./split";
+import { holdSprite, type Hold } from "./tasks";
+
+export type WebhookResult = {
+  status: number;
+  body: string;
+  work?: () => Promise<void>;
+};
+
+export type Gateway = {
+  handle: (request: Request) => Promise<WebhookResult>;
+};
+
+type GatewayOptions = {
+  config: Config;
+  sendblue: SendblueClient;
+  pi: PiAgent;
+  dedupe?: Dedupe;
+  hold?: () => Promise<Hold>;
+};
+
+export async function createGateway(options: GatewayOptions): Promise<Gateway> {
+  const dedupe =
+    options.dedupe ?? (await createDedupe(join(options.config.agentCwd, "state", "processed.json")));
+  const inFlight = new Set<string>();
+  const hold = options.hold ?? holdSprite;
+
+  return {
+    async handle(request) {
+      const url = new URL(request.url);
+      if (request.method === "GET" && url.pathname === "/health") {
+        return { status: 200, body: "ok" };
+      }
+      if (request.method !== "POST" || url.pathname !== webhookPath(options.config)) {
+        return { status: 404, body: "not found" };
+      }
+
+      const provided =
+        headerValue(request.headers, "sb-signing-secret") ??
+        headerValue(request.headers, "x-sb-signing-secret") ??
+        headerValue(request.headers, "x-webhook-secret");
+      if (!secretsEqual(provided, options.config.sendblueWebhookSecret)) {
+        const headerNames = [...request.headers.keys()].join(",");
+        console.warn(`unauthorized webhook; headers=${headerNames || "(none)"}`);
+        return { status: 401, body: "unauthorized" };
+      }
+
+      let payload: unknown;
+      try {
+        payload = await request.json();
+      } catch {
+        return { status: 400, body: "invalid json" };
+      }
+
+      const inbound = parseInbound(payload);
+      if (!inbound) {
+        return { status: 200, body: "ignored" };
+      }
+
+      const from = normalizePhone(inbound.fromNumber);
+      if (from !== options.config.allowedPhone) {
+        console.warn(`dropping message from ${inbound.fromNumber}`);
+        return { status: 200, body: "ignored" };
+      }
+
+      if (dedupe.seen(inbound.messageHandle) || inFlight.has(inbound.messageHandle)) {
+        return { status: 200, body: "duplicate" };
+      }
+      inFlight.add(inbound.messageHandle);
+
+      return {
+        status: 200,
+        body: "ok",
+        work: async () => {
+          const task = await hold();
+          const heartbeat = setInterval(() => {
+            void task.heartbeat().catch((error) => console.warn("task heartbeat failed", error));
+          }, 60_000);
+          try {
+            await options.sendblue.sendTyping(from).catch((error) => {
+              console.warn("typing failed", error);
+            });
+            console.log(`prompt ${inbound.messageHandle} from ${from}: ${inbound.content.slice(0, 80)}`);
+            const reply = await options.pi.prompt(promptFromInbound(inbound));
+            console.log(`reply ${inbound.messageHandle} (${reply.length} chars)`);
+            const chunks = splitMessage(reply);
+            for (const chunk of chunks) {
+              await options.sendblue.sendMessage(from, chunk);
+            }
+            await dedupe.remember(inbound.messageHandle);
+          } catch (error) {
+            console.error("agent turn failed", error);
+            await options.sendblue
+              .sendMessage(from, "I hit an error working on that. Try me again in a minute.")
+              .catch((sendError) => console.error("error reply failed", sendError));
+          } finally {
+            clearInterval(heartbeat);
+            inFlight.delete(inbound.messageHandle);
+            await task.release().catch((error) => console.warn("task release failed", error));
+          }
+        },
+      };
+    },
+  };
+}
+
+export function webhookPath(config: Pick<Config, "webhookPathSecret">): string {
+  return `/webhooks/sendblue/${config.webhookPathSecret}`;
+}
