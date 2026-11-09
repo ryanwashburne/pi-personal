@@ -23,6 +23,8 @@ export type BrowserStatus = {
   profileDir: string;
   missing: string[];
   error?: string;
+  exitNode?: string;
+  proxy?: string;
 };
 
 export type BrowserSession = {
@@ -42,6 +44,8 @@ export type BrowserSessionOptions = {
   which?: WhichFn;
   waitForPort?: (port: number, timeoutMs: number) => Promise<void>;
   readyDelayMs?: number;
+  requireProxy?: boolean;
+  ensureNetwork?: () => Promise<{ proxyUrl?: string; exitNode?: string } | void>;
 };
 
 export function browserProfileDir(agentCwd: string): string {
@@ -63,6 +67,7 @@ export function createBrowserSession(options: BrowserSessionOptions): BrowserSes
   const children: ChildProcess[] = [];
   let hold: Hold | undefined;
   let heartbeat: ReturnType<typeof setInterval> | undefined;
+  let network: { proxyUrl?: string; exitNode?: string } = {};
 
   function resolveChrome(): string | undefined {
     return chromePath(which, [join(process.cwd(), "browser-bin"), join(options.agentCwd, "browser-bin")]);
@@ -82,6 +87,8 @@ export function createBrowserSession(options: BrowserSessionOptions): BrowserSes
       profileDir,
       missing: missing(),
       error,
+      exitNode: network.exitNode,
+      proxy: network.proxyUrl,
     };
   }
 
@@ -101,6 +108,11 @@ export function createBrowserSession(options: BrowserSessionOptions): BrowserSes
     error = undefined;
     died = undefined;
     logs.length = 0;
+    network = (await options.ensureNetwork?.()) ?? {};
+    if (options.requireProxy && !network.proxyUrl) {
+      error = "Tailscale SOCKS proxy is not up. Set TAILSCALE_AUTHKEY and TAILSCALE_EXIT_NODE, then Start again.";
+      throw new Error(error);
+    }
 
     const throwIfDied = () => {
       if (died) throw new Error(died);
@@ -190,34 +202,40 @@ export function createBrowserSession(options: BrowserSessionOptions): BrowserSes
 <body style="margin:0;font:20px/1.4 system-ui,sans-serif;background:#dce6f2;color:#123;padding:48px">
 <h1>Sprite Chromium</h1>
 <p>This is the browser on the Sprite. Type a URL in the address bar and log in here.</p>
+<p>Egress: ${network.exitNode ? `Tailscale exit node ${network.exitNode}` : "Sprite / Fly IP"}.</p>
+<p>Check the public IP: <a href="https://ifconfig.me">ifconfig.me</a></p>
 </body>`,
       );
+      const chromeArgs = [
+        `--user-data-dir=${profileDir}`,
+        `--window-size=${BROWSER_WIDTH},${BROWSER_HEIGHT}`,
+        `--window-position=0,0`,
+        `--remote-debugging-port=${BROWSER_CDP_PORT}`,
+        "--remote-debugging-address=127.0.0.1",
+        "--ozone-platform=x11",
+        "--use-gl=angle",
+        "--use-angle=swiftshader",
+        "--enable-unsafe-swiftshader",
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--test-type",
+        "--disable-dev-shm-usage",
+        "--start-maximized",
+        "--no-first-run",
+        "--no-default-browser-check",
+        "--password-store=basic",
+        "--hide-crash-restore-bubble",
+      ];
+      if (network.proxyUrl) {
+        chromeArgs.push(`--proxy-server=${network.proxyUrl}`, "--proxy-bypass-list=<-loopback>");
+      }
+      chromeArgs.push(`file://${homePage}`);
       children.push(
         watchExit(
           track(
             spawnChild(
               chrome,
-              [
-                `--user-data-dir=${profileDir}`,
-                `--window-size=${BROWSER_WIDTH},${BROWSER_HEIGHT}`,
-                `--window-position=0,0`,
-                `--remote-debugging-port=${BROWSER_CDP_PORT}`,
-                "--remote-debugging-address=127.0.0.1",
-                "--ozone-platform=x11",
-                "--use-gl=angle",
-                "--use-angle=swiftshader",
-                "--enable-unsafe-swiftshader",
-                "--no-sandbox",
-                "--disable-setuid-sandbox",
-                "--test-type",
-                "--disable-dev-shm-usage",
-                "--start-maximized",
-                "--no-first-run",
-                "--no-default-browser-check",
-                "--password-store=basic",
-                "--hide-crash-restore-bubble",
-                `file://${homePage}`,
-              ],
+              chromeArgs,
               {
                 stdio: ["ignore", "pipe", "pipe"],
                 env: {

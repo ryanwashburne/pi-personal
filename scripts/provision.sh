@@ -71,6 +71,9 @@ sprite exec -- bash -lc "grep -q AGENT_CWD= $REMOTE_APP/.env || echo AGENT_CWD=$
 echo "Installing browser packages if needed..."
 sprite exec -- bash "$REMOTE_APP/scripts/install-browser-deps.sh"
 
+echo "Installing Tailscale client if needed..."
+sprite exec -- bash "$REMOTE_APP/scripts/install-tailscale.sh"
+
 echo "Installing gateway as a Sprite service..."
 sprite exec -- bash -lc "sprite-env services get gateway >/dev/null 2>&1 && sprite-env services delete gateway || true"
 sprite exec -- sprite-env services create gateway \

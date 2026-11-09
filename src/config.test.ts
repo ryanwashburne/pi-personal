@@ -39,6 +39,17 @@ test("loadConfig reads an optional user MCP config path", () => {
   expect(config.userMcpPath).toBe("/tmp/user-mcp.json");
 });
 
+test("loadConfig reads optional Tailscale exit-node settings", () => {
+  const config = loadConfig({
+    ...base,
+    TAILSCALE_AUTHKEY: "tskey-auth-test",
+    TAILSCALE_EXIT_NODE: "ryans-macbook",
+  });
+  expect(config.tailscaleAuthKey).toBe("tskey-auth-test");
+  expect(config.tailscaleExitNode).toBe("ryans-macbook");
+  expect(config.tailscaleSocksPort).toBe(1055);
+});
+
 test("loadConfig throws when required values are missing", () => {
   expect(() => loadConfig({ ...base, SENDBLUE_API_KEY_ID: "" })).toThrow("SENDBLUE_API_KEY_ID");
 });

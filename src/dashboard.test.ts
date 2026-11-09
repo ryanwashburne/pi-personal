@@ -26,6 +26,9 @@ const config: Config = {
   agentTimeoutMs: 1000,
   piProvider: "openrouter",
   piModel: "anthropic/claude-haiku-5.5",
+  tailscaleAuthKey: undefined,
+  tailscaleExitNode: undefined,
+  tailscaleSocksPort: 1055,
 };
 
 function mockBrowser(dir: string): BrowserSession & { running: boolean; starts: number; stops: number } {
@@ -213,6 +216,7 @@ test("starts the Sprite browser from the settings form", async () => {
 
   const page = await gateway.handle(dash(path));
   expect(page.body).toContain("running");
+  expect(page.body).toContain("Sprite / Fly IP");
 
   const viewerPath = browserViewerPath(config);
   if (!viewerPath) throw new Error("viewer path missing");

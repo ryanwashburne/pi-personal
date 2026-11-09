@@ -1,16 +1,32 @@
+import { join } from "node:path";
 import { attachVncWebSocket, toBuffer, vncProtocolHeaders, type VncProxy } from "./vnc-proxy";
 import { createBrowserSession } from "./browser-session";
 import { loadConfig } from "./config";
 import { browserWsPath } from "./dashboard";
 import { createPiAgent } from "./pi";
 import { createSendblueClient } from "./sendblue";
+import { createTailscale } from "./tailscale";
 import { createGateway } from "./webhook";
 
 const proxies = new WeakMap<object, VncProxy>();
 
 const config = loadConfig();
 const pi = createPiAgent(config);
-const browser = createBrowserSession({ agentCwd: config.agentCwd });
+const tailscale = createTailscale({
+  stateDir: join(process.cwd(), "tailscale-state"),
+  authKey: config.tailscaleAuthKey,
+  exitNode: config.tailscaleExitNode,
+  socksPort: config.tailscaleSocksPort,
+});
+const browser = createBrowserSession({
+  agentCwd: config.agentCwd,
+  requireProxy: Boolean(config.tailscaleExitNode),
+  async ensureNetwork() {
+    await tailscale.start();
+    const status = tailscale.status();
+    return { proxyUrl: status.socksUrl, exitNode: status.exitNode };
+  },
+});
 const gateway = await createGateway({
   config,
   sendblue: createSendblueClient(config),
@@ -84,6 +100,7 @@ console.log(`pi-personal listening on :${server.port}`);
 process.on("SIGTERM", () => {
   void (async () => {
     await browser.stop();
+    await tailscale.stop();
     await pi.stop();
     process.exit(0);
   })();
