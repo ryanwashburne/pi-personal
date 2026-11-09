@@ -25,7 +25,8 @@ type RunningTurn = {
   suppressDeliver: boolean;
 };
 
-export const PI_RPC_TOOLS = "read,bash,edit,write,grep,find,ls,codemode,tool_search,mcp__*";
+export const PI_RPC_TOOLS =
+  "read,bash,edit,write,grep,find,ls,codemode,tool_search,fetch,mcp__*";
 
 const RPC_ACK_TIMEOUT_MS = 30_000;
 

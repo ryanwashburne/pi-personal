@@ -6,10 +6,11 @@ import { expect, test } from "bun:test";
 import type { Config } from "./config";
 import { createPiAgent, PI_RPC_TOOLS } from "./pi";
 
-test("RPC tool allowlist declares MCP, codemode, and tool_search", () => {
+test("RPC tool allowlist declares MCP, fetch, codemode, and tool_search", () => {
   expect(PI_RPC_TOOLS).toContain("mcp__*");
   expect(PI_RPC_TOOLS).toContain("codemode");
   expect(PI_RPC_TOOLS).toContain("tool_search");
+  expect(PI_RPC_TOOLS).toContain("fetch");
   expect(PI_RPC_TOOLS).toContain("read");
   expect(PI_RPC_TOOLS).toContain("bash");
 });
@@ -41,10 +42,12 @@ test("Pi workspace documents shared Chrome and the live view URL", () => {
 
   expect(system).toContain("chrome.md");
   expect(system).toContain("live-view.md");
+  expect(system).toContain("fetch");
   expect(agents).toContain("chrome.md");
   expect(agents).toContain("live-view.md");
   expect(chrome).toMatch(/live view URL/i);
   expect(chrome).toContain("live-view.md");
+  expect(chrome).toContain("fetch");
 });
 
 function rpcLog(dir: string): Array<{ type?: string; message?: string; streamingBehavior?: string }> {
