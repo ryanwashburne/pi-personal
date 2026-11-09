@@ -35,6 +35,10 @@ test("Pi workspace documents iMessage-safe replies", () => {
   expect(imessage).toMatch(/data detectors/i);
   expect(imessage).toMatch(/Does not render/i);
   expect(heartbeat).toContain("HEARTBEAT_OK");
+  expect(heartbeat).toMatch(/silent operator/i);
+  expect(heartbeat).toContain("HEARTBEAT-STATE.md");
+  expect(heartbeat).toMatch(/Do not use Chrome/i);
+  expect(heartbeat).toMatch(/cannot send/i);
 });
 
 test("Pi workspace documents shared Chrome and the live view URL", () => {
@@ -90,11 +94,15 @@ function rpcLog(dir: string): Array<{ type?: string; message?: string; streaming
     .map((line) => JSON.parse(line) as { type?: string; message?: string; streamingBehavior?: string });
 }
 
-async function fakePi(delayMs = 250) {
+async function fakePi(delayMs = 250, session?: { sessionId?: string; name?: string }) {
   const dir = await mkdtemp(join(tmpdir(), "pi-rpc-"));
   const wrapper = join(dir, "pi");
   const rpc = join(import.meta.dir, "fake-pi-rpc.ts");
-  await Bun.write(wrapper, `#!/bin/sh\nexec bun ${JSON.stringify(rpc)} "$@"\n`);
+  const argvPath = join(dir, "argv");
+  await Bun.write(
+    wrapper,
+    `#!/bin/sh\nprintf '%s\\n' "$@" > ${JSON.stringify(argvPath)}\nexec bun ${JSON.stringify(rpc)} "$@"\n`,
+  );
   chmodSync(wrapper, 0o755);
   await Bun.write(join(dir, "fake-pi-delay-ms"), String(delayMs));
   const config: Config = {
@@ -119,7 +127,7 @@ async function fakePi(delayMs = 250) {
     tailscaleExitNode: undefined,
     tailscaleSocksPort: 1055,
   };
-  const agent = createPiAgent(config);
+  const agent = createPiAgent(config, session);
   return { dir, agent };
 }
 
@@ -172,6 +180,20 @@ test("STOP aborts the in-flight turn and starts a new prompt", async () => {
       "prompt",
       "get_last_assistant_text",
     ]);
+  } finally {
+    await agent.stop();
+  }
+});
+
+test("createPiAgent can use a separate heartbeat session id", async () => {
+  const { dir, agent } = await fakePi(50, { sessionId: "heartbeat", name: "heartbeat" });
+  try {
+    const reply = agent.prompt("scan mail");
+    await waitForRpc(dir, "prompt");
+    expect(await reply).toEqual({ kind: "reply", text: "done:scan mail" });
+    const argv = (await Bun.file(join(dir, "argv")).text()).trim().split("\n");
+    expect(argv[argv.indexOf("--session-id") + 1]).toBe("heartbeat");
+    expect(argv[argv.indexOf("--name") + 1]).toBe("heartbeat");
   } finally {
     await agent.stop();
   }

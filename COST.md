@@ -52,7 +52,7 @@ What keeps it awake (and therefore billed):
 
 - The inbound webhook connection while Pi is working (`AGENT_TIMEOUT_MS` caps a turn; default 10 minutes)
 - The Tasks API hold the gateway takes during a turn
-- A home-daemon heartbeat ping (`/heartbeat/$HEARTBEAT_SECRET`, default every 30 minutes) — same wake + model turn as a text, even if the reply is `HEARTBEAT_OK` and nothing is iMessaged
+- A home-daemon heartbeat ping (`/heartbeat/$HEARTBEAT_SECRET`, default every 2 hours) — same wake + model turn as a text, even if the reply is `HEARTBEAT_OK` and nothing is iMessaged. Heartbeat uses its own Pi session so mail scans do not inflate later iMessage turns.
 - An open live-view TCP connection (owner watching Chrome)
 - Chromium / Xvfb / a long shell job that keeps writing to a session
 
