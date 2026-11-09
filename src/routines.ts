@@ -1,5 +1,6 @@
 import type { Config } from "./config";
 import { HEARTBEAT_OK, isSilentHeartbeat } from "./heartbeat";
+import { rejectForeignHome } from "./home-registration";
 import { DEFAULT_HOME_DAEMON_PORT, homeDaemonPort, pushRoutineToHome, type SocksFetch } from "./home-push";
 import { promptWithLiveView, syncLiveViewFile } from "./live-view";
 import type { PiAgent } from "./pi";
@@ -79,6 +80,8 @@ export async function handleRoutineFire(
   if (request.method !== "POST") {
     return { status: 405, body: "method not allowed" };
   }
+  const blocked = await rejectForeignHome(request, options.config.agentCwd);
+  if (blocked) return blocked;
   let payload: unknown;
   try {
     payload = await request.json();

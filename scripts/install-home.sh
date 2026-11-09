@@ -3,7 +3,10 @@
 # and cron routines that wake the Sprite with a prompt.
 # Run on a Mac or a Raspberry Pi. The iMessage agent stays on the Fly Sprite.
 #
-#   ./scripts/install-home.sh            # install or update
+#   ./scripts/install-home.sh            # install (standby unless grandfathered)
+#   ./scripts/install-home.sh update     # copy scripts, keep role
+#   ./scripts/install-home.sh register   # this box becomes the clock + exit node
+#   ./scripts/install-home.sh standby    # demote this box; does not uninstall
 #   ./scripts/install-home.sh uninstall
 set -euo pipefail
 
@@ -127,14 +130,13 @@ EOF
   sudo sysctl -p /etc/sysctl.d/99-tailscale.conf >/dev/null
 }
 
-advertise_exit_node() {
-  local up_args=(up --advertise-exit-node --accept-dns=false)
+join_tailnet() {
+  local up_args=(up --accept-dns=false)
   [[ "$OS" == Linux ]] && up_args+=(--ssh)
   if [[ -n "${TS_HOSTNAME:-}" ]]; then
     up_args+=(--hostname="$TS_HOSTNAME")
   fi
   if ts status >/dev/null 2>&1; then
-    ts set --advertise-exit-node >/dev/null
     [[ "$OS" == Linux ]] && ts set --ssh >/dev/null || true
     if [[ -n "${TS_HOSTNAME:-}" ]]; then
       ts set --hostname="$TS_HOSTNAME" >/dev/null || true
@@ -142,6 +144,9 @@ advertise_exit_node() {
   else
     log "Starting Tailscale. If a login URL prints, open it and approve this machine."
     ts "${up_args[@]}"
+  fi
+  if [[ "$(read_role)" == "active" ]]; then
+    ts set --advertise-exit-node >/dev/null || true
   fi
 }
 
@@ -158,11 +163,14 @@ print(dns or host)
 ' 2>/dev/null || true
 }
 
+ROLE_FILE="$STATE_DIR/role"
+
 write_env() {
   local sprite="${SPRITE_URL:-}"
   local secret="${HEARTBEAT_SECRET:-}"
   local interval="${HEARTBEAT_INTERVAL_SECONDS:-$INTERVAL_DEFAULT}"
   local port="${HOME_DAEMON_PORT:-8787}"
+  local nodes="${HOME_NODES:-}"
   sprite="${sprite%/}"
   mkdir -p "$STATE_DIR"
   umask 077
@@ -171,10 +179,60 @@ SPRITE_URL=$sprite
 HEARTBEAT_SECRET=$secret
 HEARTBEAT_INTERVAL_SECONDS=$interval
 HOME_DAEMON_PORT=$port
+HOME_NODES=$nodes
 EOF
   if [[ "$OS" == Linux && "$(id -u)" -eq 0 ]]; then
     cp "$ENV_FILE" "$LINUX_ENV"
     chmod 600 "$LINUX_ENV"
+  fi
+}
+
+read_role() {
+  [[ -f "$ROLE_FILE" ]] || return 0
+  tr -d '[:space:]' < "$ROLE_FILE" | tr '[:upper:]' '[:lower:]'
+}
+
+write_role() {
+  mkdir -p "$STATE_DIR"
+  printf '%s\n' "$1" > "$ROLE_FILE"
+}
+
+ensure_initial_role() {
+  local existed_env="$1"
+  if [[ -f "$ROLE_FILE" ]]; then
+    return 0
+  fi
+  if [[ "$existed_env" == "1" ]]; then
+    write_role "active"
+    log "Existing home env had no role file; grandfathered as the active clock."
+  else
+    write_role "standby"
+  fi
+}
+
+python_daemon() {
+  local daemon_py="$INSTALLED_DAEMON"
+  if [[ ! -f "$daemon_py" ]]; then
+    daemon_py="$(dirname "$SCRIPT_SOURCE")/home-daemon.py"
+  fi
+  [[ -f "$daemon_py" ]] || fail "home-daemon.py is missing."
+  export PI_PERSONAL_HOME_DIR="$STATE_DIR"
+  python3 "$daemon_py" "$@"
+}
+
+restart_service() {
+  if [[ "$OS" == Darwin ]]; then
+    [[ -f "$PLIST" ]] || fail "Home daemon is not installed. Run ./scripts/install-home.sh first."
+    launchctl kickstart -k "gui/$(id -u)/com.pi-personal.home" >/dev/null 2>&1 || true
+  elif [[ "$OS" == Linux ]]; then
+    [[ -f "$LINUX_UNIT" ]] || fail "Home daemon is not installed. Run sudo ./scripts/install-home.sh first."
+    if [[ "$(id -u)" -eq 0 ]]; then
+      systemctl restart pi-personal-home.service
+    else
+      sudo systemctl restart pi-personal-home.service
+    fi
+  else
+    fail "Unsupported OS: $OS (Mac or Raspberry Pi Linux)."
   fi
 }
 
@@ -253,6 +311,7 @@ EOF
 }
 
 uninstall() {
+  write_role "standby"
   if [[ "$OS" == Darwin ]]; then
     launchctl bootout "gui/$(id -u)/com.pi-personal.home" >/dev/null 2>&1 || true
     rm -f "$PLIST"
@@ -267,7 +326,7 @@ uninstall() {
       sudo systemctl daemon-reload >/dev/null 2>&1 || true
     fi
   fi
-  log "Stopped the home daemon. Tailscale itself is still installed."
+  log "Stopped the home daemon. Tailscale itself is still installed. This box is not the clock."
 }
 
 run_daemon() {
@@ -283,13 +342,16 @@ run_daemon() {
 }
 
 install() {
+  local existed_env=0
+  [[ -f "$ENV_FILE" ]] && existed_env=1
   find_and_load_env || true
   ensure_python
   command -v python3 >/dev/null 2>&1 || fail "python3 is required for the home daemon scheduler."
   ensure_tailscale_installed
   enable_linux_forwarding
-  advertise_exit_node
   write_env
+  ensure_initial_role "$existed_env"
+  join_tailnet
   install_script_copy
   if [[ "$OS" == Darwin ]]; then
     install_launchd
@@ -299,38 +361,70 @@ install() {
     fail "Unsupported OS: $OS (Mac or Raspberry Pi Linux)."
   fi
 
-  local name
+  local name role
   name="$(print_exit_node_name)"
+  role="$(read_role)"
   log
-  log "Home daemon is running (exit node + heartbeat ping + routines)."
-  log "Re-run this script to update it."
+  if [[ "$role" == "active" ]]; then
+    log "Home daemon is running as the registered clock (exit node + heartbeat + routines)."
+  else
+    log "Home daemon is installed in standby (Tailscale + HTTP API). It will not ping or fire crons."
+    log "Make this the clock with: ./scripts/install-home.sh register"
+  fi
+  log "Code updates: ./scripts/install-home.sh update  (or ./scripts/provision.sh from the Mac)."
   if [[ -n "$name" ]]; then
     log
-    log "In the Sprite repo .env on the Mac (gitignored):"
-    log "  TAILSCALE_EXIT_NODE=$name"
-    log "Keep TAILSCALE_AUTHKEY. Re-run ./scripts/provision.sh after changing it."
+    log "Tailscale hostname: $name"
+    log "Put TAILSCALE_AUTHKEY in the Sprite repo .env. After register, the Sprite stores the exit node in memory/home.json."
+    log "Optional fallback: TAILSCALE_EXIT_NODE=$name"
   fi
   log
-  log "Once:"
-  log "  1. https://login.tailscale.com/admin/machines → this machine → Use as exit node"
+  log "Once per machine:"
+  log "  1. https://login.tailscale.com/admin/machines → this machine → Use as exit node (needed when it is registered)"
   log "  2. Same menu → Disable key expiry"
   if [[ -z "${SPRITE_URL:-}" || -z "${HEARTBEAT_SECRET:-}" ]]; then
-    log "  3. Set SPRITE_URL and HEARTBEAT_SECRET (provision.sh prints the heartbeat URL) and re-run this script"
-  else
-    log "  Heartbeat ping and routines are on. Leave this machine powered on home internet."
+    log "  3. Set SPRITE_URL and HEARTBEAT_SECRET, then re-run install and register"
   fi
   if [[ "$OS" == Darwin ]]; then
     log
-    log "To move this to a Raspberry Pi:"
+    log "To move the clock to a Raspberry Pi:"
     log "  scp $ENV_FILE $INSTALLED_SCRIPT $INSTALLED_DAEMON USER@raspberrypi.local:"
     log "  ssh USER@raspberrypi.local"
     log "  sudo bash install-home.sh"
+    log "  sudo bash install-home.sh register"
   fi
+}
+
+update() {
+  find_and_load_env || true
+  ensure_python
+  command -v python3 >/dev/null 2>&1 || fail "python3 is required for the home daemon scheduler."
+  [[ -d "$STATE_DIR" ]] || fail "Home daemon is not installed. Run ./scripts/install-home.sh first."
+  install_script_copy
+  restart_service
+  log "Updated home daemon scripts. Role unchanged ($(read_role || echo unknown))."
+}
+
+register_cmd() {
+  find_and_load_env || true
+  ensure_python
+  command -v python3 >/dev/null 2>&1 || fail "python3 is required for the home daemon scheduler."
+  [[ -f "$INSTALLED_DAEMON" || -f "$(dirname "$SCRIPT_SOURCE")/home-daemon.py" ]] || fail "Install first."
+  python_daemon register
+}
+
+standby_cmd() {
+  find_and_load_env || true
+  ensure_python
+  python_daemon standby
 }
 
 case "$CMD" in
   daemon) run_daemon ;;
   uninstall) uninstall ;;
+  update) update ;;
+  register) register_cmd ;;
+  standby) standby_cmd ;;
   install|"") install ;;
-  *) fail "Usage: $0 [install|uninstall]" ;;
+  *) fail "Usage: $0 [install|update|register|standby|uninstall]" ;;
 esac

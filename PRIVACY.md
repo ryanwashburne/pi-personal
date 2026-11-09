@@ -49,6 +49,7 @@ The reply walks the message path back. Browser traffic is a side path. Sprite di
 | Extra MCP servers | HTTP servers added on the settings page (optional bearer token) | Whatever that server exposes | Tool results → LLM. Token stored on Sprite only. The MCP host sees the calls. |
 | Heartbeat mail / calendar scan | Google MCP on the scheduled home-daemon ping | Stay-ahead drafts and rare iMessage alerts | Yes — subjects/events to the LLM in the `heartbeat` session. Gmail drafts stay in Gmail. |
 | Routines | Owner iMessage → `routine` tool → home-daemon cron → POST `/routine/$HEARTBEAT_SECRET` | Repeating prompts (summaries, watches) | Yes — the routine prompt and tool results go to the LLM in the `routines` session. The cron and prompt also live in `~/.pi-personal-home/routines.json` on the home box. |
+| Home registration | `install-home.sh register` → POST `/home/$HEARTBEAT_SECRET` | One box is the clock and Chrome exit node | Node id and hostname on Sprite disk (`memory/home.json`) and in the home-daemon role file. Not sent to the LLM. |
 | Home IP / browsing destinations | Tailscale exit node (Mac or Raspberry Pi) for Chrome only | Make Sprite Chrome look like house internet | Websites see the home IP. Tailscale does not read payload. Sendblue stays on Fly. |
 
 ## Who processes it
@@ -84,6 +85,7 @@ Disk survives sleep; processes do not. These paths are gitignored.
 | `~/.pi/agent/auth.json`, `~/.pi/agent/mcp.json`, and `agent/.pi/mcp.json` | Provider credentials; MCP URLs, host-specific Playwright paths, and bearer tokens | Model-account and MCP-server access |
 | `agent/memory/NOTES.md` | Durable notes Pi is told to keep | Whatever was written there |
 | `agent/memory/routines.json` | Scheduled prompts and cron | The owner’s repeating jobs |
+| `agent/memory/home.json` | Registered home-box node id and hostname | Which machine may ping heartbeat / fire routines / proxy Chrome |
 | Fly `gateway.log` | First 80 chars of each inbound text, phone, handles | Message snippets + identity |
 
 ## Controls already in the repo

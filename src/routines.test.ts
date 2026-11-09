@@ -354,6 +354,7 @@ test("install-home.sh copies the python scheduler", async () => {
   const script = await Bun.file(join(import.meta.dir, "../scripts/install-home.sh")).text();
   expect(script).toContain("home-daemon.py");
   expect(script).toContain("exec python3");
+  expect(script).toContain("python_daemon register");
   const syntax = Bun.spawnSync(["bash", "-n", join(import.meta.dir, "../scripts/install-home.sh")]);
   expect(syntax.exitCode).toBe(0);
   const compile = Bun.spawnSync(["python3", "-m", "py_compile", join(import.meta.dir, "../scripts/home-daemon.py")]);

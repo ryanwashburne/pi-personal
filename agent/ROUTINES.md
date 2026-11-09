@@ -1,6 +1,6 @@
 # Routines
 
-The owner can ask for repeating work in plain language. That is a routine: a prompt on a cron, run by the home daemon, which wakes this Sprite.
+The owner can ask for repeating work in plain language. That is a routine: a prompt on a cron, run by the **registered** home daemon, which wakes this Sprite.
 
 Timezone is America/New_York unless they say otherwise.
 

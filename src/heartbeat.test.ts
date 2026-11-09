@@ -259,7 +259,22 @@ test("install-home.sh is valid bash with a 2h default interval", async () => {
   const proc = Bun.spawnSync(["bash", "-n", script], { stdout: "pipe", stderr: "pipe" });
   expect(proc.exitCode).toBe(0);
   expect(proc.stderr.toString()).toBe("");
-  expect(await Bun.file(script).text()).toContain("INTERVAL_DEFAULT=7200");
+  const text = await Bun.file(script).text();
+  expect(text).toContain("INTERVAL_DEFAULT=7200");
+  expect(text).toContain("register)");
+  expect(text).toContain("update)");
+  expect(text).not.toContain("Usage: $0 [install|uninstall]");
+});
+
+test("sync-home.sh is valid bash and does not flip role", async () => {
+  const script = join(import.meta.dir, "../scripts/sync-home.sh");
+  const proc = Bun.spawnSync(["bash", "-n", script], { stdout: "pipe", stderr: "pipe" });
+  expect(proc.exitCode).toBe(0);
+  expect(proc.stderr.toString()).toBe("");
+  const text = await Bun.file(script).text();
+  expect(text).toContain('"$INSTALLER" update');
+  expect(text).toContain('install-home.sh" update');
+  expect(text).not.toContain("install-home.sh register");
 });
 
 test("provision.sh preserves gitignored notes and heartbeat state", async () => {
@@ -271,12 +286,16 @@ test("provision.sh preserves gitignored notes and heartbeat state", async () => 
   expect(script).toContain("memory/NOTES.md");
   expect(script).toContain("memory/HEARTBEAT-STATE.md");
   expect(script).toContain("memory/routines.json");
+  expect(script).toContain("memory/home.json");
+  expect(script).toContain("sync-home.sh");
   expect(script).toContain("--exclude agent/memory/NOTES.md");
   expect(script).toContain("--exclude agent/memory/HEARTBEAT-STATE.md");
   expect(script).toContain("--exclude agent/memory/routines.json");
+  expect(script).toContain("--exclude agent/memory/home.json");
   const ignore = await Bun.file(join(import.meta.dir, "../.gitignore")).text();
   expect(ignore).toContain("agent/memory/NOTES.md");
   expect(ignore).toContain("agent/memory/HEARTBEAT-STATE.md");
   expect(ignore).toContain("agent/memory/routines.json");
   expect(ignore).toContain("agent/memory/routines/");
+  expect(ignore).toContain("agent/memory/home.json");
 });
