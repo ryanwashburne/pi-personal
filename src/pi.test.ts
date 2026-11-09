@@ -57,6 +57,28 @@ test("Pi workspace documents shared Chrome and the live view URL", () => {
   expect(chrome).toContain("fetch");
 });
 
+test("Pi workspace requires login confirmation, stay-logged-in, and computed numbers", () => {
+  const agentDir = join(import.meta.dir, "../agent");
+  const system = readFileSync(join(agentDir, "SYSTEM.md"), "utf8");
+  const agents = readFileSync(join(agentDir, "AGENTS.md"), "utf8");
+  const chrome = readFileSync(join(agentDir, "chrome.md"), "utf8");
+
+  expect(system).toMatch(/before filling a stored login/i);
+  expect(system).toMatch(/wait for a yes/i);
+  expect(system).toMatch(/do not fill until they confirm/i);
+  expect(system).toMatch(/compute it with a tool or the shell/i);
+  expect(system).toMatch(/compute it a second time/i);
+  expect(system).toMatch(/do not guess/i);
+  expect(system).toMatch(/quote a number as-is only when copying it from a source/i);
+
+  expect(chrome).toMatch(/wait for the owner to confirm/i);
+  expect(chrome).toMatch(/Remember me/i);
+  expect(chrome).toMatch(/Stay logged in/i);
+
+  expect(agents).toMatch(/after the owner confirms/i);
+  expect(agents).toMatch(/Remember me \/ Stay logged in/i);
+});
+
 test("Pi workspace documents spend", () => {
   const agentDir = join(import.meta.dir, "../agent");
   const system = readFileSync(join(agentDir, "SYSTEM.md"), "utf8");

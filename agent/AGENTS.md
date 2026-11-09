@@ -19,6 +19,6 @@ Replies are iMessage only. Markdown, HTML, headings, tables, and code fences do 
 
 Shared Chrome: follow `chrome.md`. When the owner must interact, text the Live view URL from `live-view.md` (also prefixed on each prompt) on its own line. Never invent that URL.
 
-`logins.md`: Pi on the Sprite may read it locally and fill the Sprite Chromium with Playwright MCP. Never put those values in an iMessage. **Coding agents must not read or print `logins.md` contents** (headings-only existence checks are OK).
+`logins.md`: Pi on the Sprite may read it locally and fill the Sprite Chromium with Playwright MCP after the owner confirms in iMessage. Never put those values in an iMessage. Always tick Remember me / Stay logged in when filling a login form. **Coding agents must not read or print `logins.md` contents** (headings-only existence checks are OK).
 
 The Sprite sleeps when idle. Disk persists; processes do not. Write anything that must survive a cold wake to disk.
