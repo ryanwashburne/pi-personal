@@ -4,7 +4,9 @@ const API_BASE = "https://api.sendblue.com";
 
 /** iMessage typing expires on its own; 5 minutes is Sendblue's maximum. */
 export const TYPING_MAX_DURATION_MS = 300_000;
-const TYPING_TIMEOUTS_MS = [5_000, 15_000] as const;
+/** First attempt is short so a cold Sprite DNS/TLS blip falls back quickly. */
+const TYPING_TIMEOUTS_MS = [1_500, 8_000] as const;
+const AUTO_TYPING_ATTEMPTS = 3;
 
 export type SendblueFetch = (input: string, init?: RequestInit) => Promise<Response>;
 
@@ -71,14 +73,30 @@ export function createSendblueClient(config: Config, fetchFn: SendblueFetch = fe
     },
 
     async enableAutoTyping() {
-      const response = await post(
-        "/accounts/settings/auto-typing-indicator",
-        { auto_typing_indicator: true },
-        10_000,
-      );
-      if (!response.ok) {
-        console.warn(`auto typing enable failed: ${response.status} ${await response.text()}`);
+      for (let attempt = 0; attempt < AUTO_TYPING_ATTEMPTS; attempt++) {
+        try {
+          const response = await post(
+            "/accounts/settings/auto-typing-indicator",
+            { auto_typing_indicator: true },
+            10_000,
+          );
+          if (response.ok) {
+            console.log("sendblue auto typing enabled");
+            return;
+          }
+          console.warn(`auto typing enable failed: ${response.status} ${await response.text()}`);
+          if (response.status >= 400 && response.status < 500 && response.status !== 429) return;
+        } catch (error) {
+          console.warn("auto typing failed", error);
+        }
+        if (attempt < AUTO_TYPING_ATTEMPTS - 1) {
+          await delay(250 * (attempt + 1));
+        }
       }
     },
   };
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
