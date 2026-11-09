@@ -11,7 +11,7 @@ This repo is meant to be public. Keep secrets in `.env` on your machine and on t
 1. You iMessage the Sendblue number from your allowlisted phone.
 2. Sendblue POSTs to the Sprite URL. That request wakes the VM (about 100–500ms warm, 1–2s cold).
 3. The gateway checks the signing secret and phone allowlist, returns 200, then holds the Sprite awake with the Tasks API while Pi runs.
-4. Pi's reply goes back out through Sendblue. The hold is released and the Sprite sleeps.
+4. Another text while Pi is working steers the current turn after the in-flight tool call. `STOP` / `cancel` aborts it. Pi's reply goes back out through Sendblue. The hold is released and the Sprite sleeps.
 
 ## Setup
 

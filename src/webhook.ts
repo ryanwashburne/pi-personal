@@ -124,13 +124,24 @@ export async function createGateway(options: GatewayOptions): Promise<Gateway> {
             });
             console.log(`prompt ${inbound.messageHandle}`);
             const live = syncLiveViewFile(options.config, request.headers);
-            const reply = await options.pi.prompt(
+            const result = await options.pi.prompt(
               promptWithLiveView(promptFromInbound(inbound), live.liveViewUrl),
             );
-            console.log(`reply ${inbound.messageHandle} (${reply.length} chars)`);
-            const chunks = splitMessage(reply);
-            for (const chunk of chunks) {
-              await options.sendblue.sendMessage(from, chunk);
+            switch (result.kind) {
+              case "injected":
+                console.log(`injected ${inbound.messageHandle}`);
+                break;
+              case "reply": {
+                console.log(`reply ${inbound.messageHandle} (${result.text.length} chars)`);
+                for (const chunk of splitMessage(result.text)) {
+                  await options.sendblue.sendMessage(from, chunk);
+                }
+                break;
+              }
+              default: {
+                const _never: never = result;
+                throw new Error(`unexpected prompt result ${JSON.stringify(_never)}`);
+              }
             }
             await dedupe.remember(inbound.messageHandle);
           } catch (error) {
