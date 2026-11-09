@@ -53,6 +53,8 @@ The iMessage agent does **not** run on the Raspberry Pi. Do not install the gate
 
 Pi always reads `~/.pi/agent/mcp.json`. With `--approve` it also reads `.pi/mcp.json` in the agent workspace. The gateway writes a built-in Playwright stdio server into **both** so Pi can start Chromium and control it over CDP (`127.0.0.1:9222`). The settings page adds extra HTTP servers the same way, with `exposure: "direct"` so tools are declared to the model as `mcp__<name>__<tool>`. The settings page also runs `pi mcp list` so you can see connect errors instead of an empty tool list. An agent-started browser does not take the Sprite `browser` task hold — after the reply the Sprite can sleep and Chrome dies; cookies stay on disk. Start from settings if you want the box held awake for a live-view login.
 
+`provision.sh` also runs `pi install npm:cc-safety-net`. That extension blocks `.env`, SSH keys, and the extra paths in `agent/.cc-safety-net/policy.json` (`browser-profile`, sessions, MCP config, the gateway `.env`). It does **not** block `logins.md` or `live-view.md` — Pi has to read those. Built-in `fetch` (no API key) loads public http(s) pages without Chrome; Playwright stays for logins and JS. The RPC allowlist in the gateway includes `fetch`.
+
 First-time Pi login on the Sprite:
 
 ```bash
@@ -108,7 +110,7 @@ The gateway can also run on your laptop (`bun start`) with the same `.env` if yo
 
 - `src/` — webhook gateway (Bun), including the settings live-view browser
 - `agent/` — Pi working tree (`SYSTEM.md`, notes, `chrome.md`). Copied to `/home/sprite/agent` on the Sprite
-- `scripts/provision.sh` — create/update the Sprite; installs Google Chrome, Xvfb, x11vnc, and Tailscale if missing
+- `scripts/provision.sh` — create/update the Sprite; installs Google Chrome, Xvfb, x11vnc, Tailscale if missing, and CC Safety Net into Pi
 - `scripts/setup-macos-exit-node.sh` — run on the MacBook to advertise a Tailscale exit node
 - `scripts/setup-rpi-exit-node.sh` — run on the Raspberry Pi to advertise the always-on exit node
 - `AGENTS.md` — instructions for coding agents

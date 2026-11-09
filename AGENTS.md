@@ -12,7 +12,9 @@ This git repo is public. Secrets stay in gitignored files on the Mac and on the 
 - `agent/` — copied to `/home/sprite/agent`; Pi’s cwd on the Sprite (`SYSTEM.md`, notes, logins, `imessage.md`, `chrome.md`)
 - `agent/imessage.md` — what Messages actually renders in Pi’s reply bubble (markdown does not)
 - `agent/chrome.md` — shared Sprite Chromium; live-view URL is generated into gitignored `agent/live-view.md`
-- `scripts/provision.sh` — create/update the Sprite and copy `.env` + `agent/logins.md`
+- `scripts/provision.sh` — create/update the Sprite and copy `.env` + `agent/logins.md`; installs `cc-safety-net` into Pi
+- `agent/.cc-safety-net/policy.json` — extra deny paths for Pi (`browser-profile`, sessions, MCP files, gateway `.env`). `logins.md` and `live-view.md` stay readable to Pi
+- `agent/.pi/extensions/fetch/` — keyless HTTP `fetch` tool (no search API key)
 - `scripts/setup-macos-exit-node.sh` / `scripts/setup-rpi-exit-node.sh` — advertise a home Tailscale exit node (agent stays on the Sprite)
 
 ## Commands
@@ -32,6 +34,7 @@ Do not commit unless asked. Do not push unless asked.
 - Prefer headings-only checks for `agent/logins.md` (site names exist / fields non-empty). Never print field values.
 - Prefer existence-only checks for `agent/live-view.md`. Never print it — the path is `DASHBOARD_SECRET`.
 - Run `bun test` after gateway changes.
+- Keep `logins.md` and `live-view.md` off the CC Safety Net deny list. Pi on the Sprite must read them. Coding agents still must not print their contents.
 
 **Ask first**
 
