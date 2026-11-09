@@ -78,15 +78,19 @@ export function createTailscale(options: TailscaleOptions): TailscaleService {
     mkdirSync(options.stateDir, { recursive: true });
     error = undefined;
 
-    daemon = spawnChild(
-      tailscaled,
-      [
-        `--statedir=${options.stateDir}`,
-        `--socket=${socket}`,
-        "--tun=userspace-networking",
-        `--socks5-server=127.0.0.1:${socksPort}`,
-      ],
-      { stdio: ["ignore", "pipe", "pipe"] },
+    const logs: string[] = [];
+    daemon = collectLogs(
+      spawnChild(
+        tailscaled,
+        [
+          `--statedir=${options.stateDir}`,
+          `--socket=${socket}`,
+          "--tun=userspace-networking",
+          `--socks5-server=127.0.0.1:${socksPort}`,
+        ],
+        { stdio: ["ignore", "pipe", "pipe"] },
+      ),
+      logs,
     );
     daemon.on("exit", (code) => {
       if (stopping) return;
@@ -96,27 +100,32 @@ export function createTailscale(options: TailscaleOptions): TailscaleService {
 
     try {
       await waitForPort(socksPort, 15_000);
-      const up = spawnChild(
-        tailscale,
-        [
-          `--socket=${socket}`,
-          "up",
-          `--authkey=${options.authKey}`,
-          `--exit-node=${options.exitNode}`,
-          "--exit-node-allow-lan-access=false",
-          "--accept-dns=false",
-          `--hostname=${hostname}`,
-          "--reset",
-        ],
-        { stdio: ["ignore", "pipe", "pipe"] },
+      const up = collectLogs(
+        spawnChild(
+          tailscale,
+          [
+            `--socket=${socket}`,
+            "up",
+            `--authkey=${options.authKey}`,
+            `--exit-node=${options.exitNode}`,
+            "--accept-dns=false",
+            `--hostname=${hostname}`,
+          ],
+          { stdio: ["ignore", "pipe", "pipe"] },
+        ),
+        logs,
       );
       const code = await waitForExit(up, 60_000);
       if (code !== 0) {
-        throw new Error(`tailscale up failed (code=${code}). Is the exit node approved and online?`);
+        throw new Error(
+          `tailscale up failed (code=${code}). Mac awake? Exit node approved? Name matches TAILSCALE_EXIT_NODE?\n${redact(logs.join("").trim()) || "(no tailscale output)"}`,
+        );
       }
       running = true;
     } catch (caught) {
       error = caught instanceof Error ? caught.message : String(caught);
+      const extra = redact(logs.join("").trim());
+      if (extra && !error.includes(extra)) error = `${error}\n${extra}`;
       await stop();
       throw new Error(error);
     }
@@ -149,6 +158,22 @@ function waitForExit(child: ChildProcess, timeoutMs: number): Promise<number | n
       resolve(code);
     });
   });
+}
+
+function collectLogs(child: ChildProcess, logs: string[]): ChildProcess {
+  const append = (chunk: string) => {
+    logs.push(chunk);
+    if (logs.join("").length > 8_000) logs.splice(0, logs.length - 4);
+  };
+  child.stdout?.setEncoding("utf8");
+  child.stderr?.setEncoding("utf8");
+  child.stdout?.on("data", (chunk: string) => append(chunk));
+  child.stderr?.on("data", (chunk: string) => append(chunk));
+  return child;
+}
+
+function redact(text: string): string {
+  return text.replace(/tskey-[a-z0-9-]+/gi, "tskey-REDACTED");
 }
 
 function delay(ms: number) {
