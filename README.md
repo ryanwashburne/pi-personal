@@ -28,6 +28,7 @@ Fill `.env` (this file is gitignored):
 - `WEBHOOK_PATH_SECRET` and `SENDBLUE_WEBHOOK_SECRET` — long random strings
 - `DASHBOARD_SECRET` — long random string for the settings page (optional; omit to disable it)
 - a model key (`OPENROUTER_API_KEY`, `ANTHROPIC_API_KEY`, …)
+- optional site logins in `agent/logins.md` (gitignored; copy from `agent/logins.md.example`)
 
 ```bash
 ./scripts/provision.sh
@@ -76,6 +77,7 @@ The gateway can also run on your laptop (`bun start`) with the same `.env` if yo
 - `agent/` — Pi working tree (`SYSTEM.md`, notes). Copied to `/home/sprite/agent` on the Sprite
 - `scripts/provision.sh` — create/update the Sprite; installs Google Chrome, Xvfb, x11vnc, and Tailscale if missing
 - `scripts/setup-macos-exit-node.sh` — run on the MacBook to advertise a Tailscale exit node
+- `AGENTS.md` — instructions for coding agents
 - `.env.example` — names of required secrets, no real values
 
 ## What must not be committed
@@ -84,6 +86,7 @@ The gateway can also run on your laptop (`bun start`) with the same `.env` if yo
 - `.sprite` (Fly org/sprite selection)
 - `agent/sessions/` and `agent/state/` (conversation history)
 - `agent/browser-profile/` (Chromium logins and cookies)
+- `agent/logins.md` (site usernames and passwords)
 - Pi `auth.json` / provider credentials
 
 Access control for the live agent is the unguessable webhook path, the Sendblue signing secret, the phone allowlist in `.env`, and the unguessable settings path (that same path is the only lock on the streamed browser). Sendblue keys stay in the gateway. Pi does not get a “text anyone” tool.

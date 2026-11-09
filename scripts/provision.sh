@@ -47,6 +47,7 @@ sprite exec -- mkdir -p "$REMOTE_APP" "$REMOTE_AGENT"
 sprite exec -- bash -lc "if [ -f $REMOTE_AGENT/.pi/mcp.json ]; then cp $REMOTE_AGENT/.pi/mcp.json /tmp/pi-personal-mcp.json; fi"
 sprite exec -- bash -lc "if [ -f /home/sprite/.pi/agent/mcp.json ]; then cp /home/sprite/.pi/agent/mcp.json /tmp/pi-personal-user-mcp.json; fi"
 sprite exec -- bash -lc "if [ -d $REMOTE_AGENT/browser-profile ]; then rm -rf /tmp/pi-personal-browser-profile; cp -a $REMOTE_AGENT/browser-profile /tmp/pi-personal-browser-profile; fi"
+sprite exec -- bash -lc "if [ -f $REMOTE_AGENT/logins.md ]; then cp -a $REMOTE_AGENT/logins.md /tmp/pi-personal-logins.md; fi"
 tar -czf - \
   --exclude .git \
   --exclude node_modules \
@@ -64,7 +65,8 @@ if [ -f /tmp/pi-personal-user-mcp.json ]; then mv /tmp/pi-personal-user-mcp.json
 has_mcp() { grep -Eq '\"(url|command)\"' \"\$1\" 2>/dev/null; }
 if has_mcp $REMOTE_AGENT/.pi/mcp.json && ! has_mcp /home/sprite/.pi/agent/mcp.json; then cp $REMOTE_AGENT/.pi/mcp.json /home/sprite/.pi/agent/mcp.json; fi
 if has_mcp /home/sprite/.pi/agent/mcp.json && ! has_mcp $REMOTE_AGENT/.pi/mcp.json; then cp /home/sprite/.pi/agent/mcp.json $REMOTE_AGENT/.pi/mcp.json; fi
-if [ -d /tmp/pi-personal-browser-profile ]; then rm -rf $REMOTE_AGENT/browser-profile; mv /tmp/pi-personal-browser-profile $REMOTE_AGENT/browser-profile; fi"
+if [ -d /tmp/pi-personal-browser-profile ]; then rm -rf $REMOTE_AGENT/browser-profile; mv /tmp/pi-personal-browser-profile $REMOTE_AGENT/browser-profile; fi
+if [ ! -f $REMOTE_AGENT/logins.md ] && [ -f /tmp/pi-personal-logins.md ]; then mv /tmp/pi-personal-logins.md $REMOTE_AGENT/logins.md; fi"
 sprite exec -- bash -lc "cat > $REMOTE_APP/.env" < .env
 sprite exec -- bash -lc "grep -q AGENT_CWD= $REMOTE_APP/.env || echo AGENT_CWD=$REMOTE_AGENT >> $REMOTE_APP/.env"
 

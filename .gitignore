@@ -14,6 +14,7 @@ credentials.json
 agent/sessions/
 agent/state/
 agent/browser-profile/
+agent/logins.md
 browser-bin/
 tailscale-state/
 /.pi/

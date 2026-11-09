@@ -1,0 +1,16 @@
+# Sprite logins
+
+One `##` heading per site. Copy a block to add more.
+Never commit `logins.md`. Never put these values in an iMessage.
+
+## First site
+- url: https://example.com/login
+- username: you@example.com
+- password: replace-me
+- notes:
+
+## Second site
+- url: https://other.example.com/login
+- username: you@example.com
+- password: replace-me
+- notes:
