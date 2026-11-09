@@ -18,7 +18,7 @@ This git repo is public. Secrets stay in gitignored files on the Mac and on the 
 - `agent/chrome.md` — shared Sprite Chromium; live-view URL is generated into gitignored `agent/live-view.md`
 - `PRIVACY.md` — what data this agent processes and where it goes (LLM, Sendblue, Fly, browser)
 - `COST.md` — published rates for Sendblue, Sprite, and model tokens
-- `scripts/provision.sh` — create/update the Sprite and copy `.env` + `agent/logins.md`; installs `cc-safety-net` into Pi
+- `scripts/provision.sh` — create/update the Sprite and copy `.env` + `agent/logins.md`; installs `cc-safety-net` into Pi; enables Sendblue auto-typing (warmup “…”)
 - `agent/.cc-safety-net/policy.json` — extra deny paths for Pi (`browser-profile`, sessions, MCP files, gateway `.env`). `logins.md` and `live-view.md` stay readable to Pi
 - `agent/.pi/extensions/fetch/` — keyless HTTP `fetch` tool (no search API key)
 - `agent/.pi/extensions/spend/` — live spend tool (do not bypass it by reading session JSONL)
@@ -47,6 +47,10 @@ Do not commit unless asked. Do not push unless asked.
 - Prefer existence-only checks for `agent/memory/NOTES.md`, `agent/memory/HEARTBEAT-STATE.md`, `agent/memory/routines.json`, and `agent/memory/home.json` (personal Sprite state). Never print their contents.
 - Run `bun test` after gateway changes.
 - Keep `logins.md` and `live-view.md` off the CC Safety Net deny list. Pi on the Sprite must read them. Coding agents still must not print their contents.
+
+**Typing (iMessage “…”)**
+
+Warmup dots while Fly starts the Sprite come only from Sendblue auto-typing, enabled in `scripts/provision.sh`. That is an account setting; it takes effect on the next inbound. This process is not running yet (cold) or is frozen (warm). Do not try to cover that window by binding earlier, typing when the webhook lands, pulsing during MCP init, or calling `enableAutoTyping` on boot — those all run after Fly has already forwarded the POST. A GitHub merge does not flip the Sendblue toggle. After a long idle with no outbound, Apple/Sendblue often drop typing even when auto-typing is on (best-effort; they need a recent conversation). Gateway `sendTyping` / pulse is only for after this process is up (Pi thinking).
 
 **Ask first**
 

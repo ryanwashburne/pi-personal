@@ -44,7 +44,7 @@ function post(body: unknown, headers: Record<string, string> = {}) {
   });
 }
 
-test("boot files do not import the heavy gateway graph", () => {
+test("listen-path files stay thin so HTTP can bind after this process exists", () => {
   const index = readFileSync(join(import.meta.dir, "index.ts"), "utf8");
   const early = readFileSync(join(import.meta.dir, "early-typing.ts"), "utf8");
   for (const src of [index, early]) {
@@ -65,7 +65,7 @@ test("boot files do not import the heavy gateway graph", () => {
   expect(loadAppAt).toBeGreaterThan(listenAt);
 });
 
-test("HTTP handler types before a hanging app import resolves", async () => {
+test("HTTP handler types after listen, before a hanging app import resolves", async () => {
   const typed: string[] = [];
   let releaseGateway: (gateway: EarlyGateway) => void = () => {};
   const gateway = new Promise<EarlyGateway>((resolve) => {
