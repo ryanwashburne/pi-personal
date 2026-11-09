@@ -7,6 +7,7 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import urllib.error
@@ -25,6 +26,10 @@ DEFAULT_INTERVAL = 7200
 DEFAULT_PORT = 8787
 DEFAULT_TZ = "America/New_York"
 BUSY_RETRY_SECONDS = 300
+ROLE_ACTIVE = "active"
+ROLE_STANDBY = "standby"
+UNREGISTERED_BODY = "youAreRegistered: false"
+HOME_NODE_HEADER = "X-Home-Node"
 FIELD_RE = re.compile(r"^(?:\*|\d+)(?:-\d+)?(?:/\d+)?(?:,(?:\*|\d+)(?:-\d+)?(?:/\d+)?)*$")
 RANGES = (
     ("minute", 0, 59),
@@ -46,6 +51,61 @@ def state_dir() -> str:
 
 def routines_path() -> str:
     return os.path.join(state_dir(), "routines.json")
+
+
+def role_path() -> str:
+    return os.path.join(state_dir(), "role")
+
+
+def env_path() -> str:
+    return os.path.join(state_dir(), "env")
+
+
+def read_role() -> str:
+    try:
+        raw = open(role_path(), encoding="utf-8").read().strip().lower()
+    except FileNotFoundError:
+        return ""
+    if raw in (ROLE_ACTIVE, ROLE_STANDBY):
+        return raw
+    return ""
+
+
+def write_role(role: str) -> None:
+    if role not in (ROLE_ACTIVE, ROLE_STANDBY):
+        raise ValueError("role must be active or standby")
+    os.makedirs(state_dir(), exist_ok=True)
+    path = role_path()
+    tmp = f"{path}.tmp"
+    with open(tmp, "w", encoding="utf-8") as handle:
+        handle.write(f"{role}\n")
+    os.replace(tmp, path)
+
+
+def clock_enabled(role: str | None = None) -> bool:
+    return (role if role is not None else read_role()) == ROLE_ACTIVE
+
+
+def ensure_role() -> str:
+    existing = read_role()
+    if existing:
+        return existing
+    if os.path.isfile(env_path()):
+        write_role(ROLE_ACTIVE)
+        log("grandfathered missing role to active")
+        return ROLE_ACTIVE
+    write_role(ROLE_STANDBY)
+    return ROLE_STANDBY
+
+
+def apply_sprite_result(code: int, text: str) -> bool:
+    body = (text or "").strip()
+    if code == 409 or UNREGISTERED_BODY in body:
+        write_role(ROLE_STANDBY)
+        unadvertise_exit_node()
+        log("demoted to standby (sprite does not have this node registered)")
+        return False
+    return True
 
 
 def env_int(name: str, default: int) -> int:
@@ -196,12 +256,50 @@ class RoutineHandler(BaseHTTPRequestHandler):
         if self.path == "/health":
             self._send(200, "ok", "text/plain")
             return
+        if self.path == "/identity":
+            if not authorize(self):
+                return
+            identity = tailscale_self()
+            self._send_json(
+                200,
+                {
+                    "nodeId": identity.get("nodeId") or "",
+                    "hostname": identity.get("hostname") or "",
+                    "role": read_role() or ROLE_STANDBY,
+                },
+            )
+            return
         if self.path == "/routines":
             if not authorize(self):
                 return
             self._send_json(200, {"routines": public_routines(load_routines())})
             return
         self.send_error(404, "not found")
+
+    def do_POST(self) -> None:  # noqa: N802
+        if self.path != "/role":
+            self.send_error(404, "not found")
+            return
+        if not authorize(self):
+            return
+        try:
+            body = json.loads(self._read_body() or "{}")
+        except json.JSONDecodeError:
+            self.send_error(400, "invalid json")
+            return
+        if not isinstance(body, dict):
+            self.send_error(400, "invalid json")
+            return
+        role = str(body.get("role") or "").strip().lower()
+        if role not in (ROLE_ACTIVE, ROLE_STANDBY):
+            self.send_error(400, "role must be active or standby")
+            return
+        write_role(role)
+        if role == ROLE_ACTIVE:
+            advertise_exit_node()
+        else:
+            unadvertise_exit_node()
+        self._send_json(200, {"ok": True, "role": role})
 
     def do_PUT(self) -> None:  # noqa: N802
         routine_id = routine_id_from_path(self.path)
@@ -304,10 +402,18 @@ def public_routines(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [public_routine(item) for item in items]
 
 
-def http_call(url: str, method: str = "GET", body: bytes | None = None, timeout: int = 30) -> tuple[int, str]:
+def http_call(
+    url: str,
+    method: str = "GET",
+    body: bytes | None = None,
+    timeout: int = 30,
+    headers: dict[str, str] | None = None,
+) -> tuple[int, str]:
     request = urllib.request.Request(url, data=body, method=method)
     if body is not None:
         request.add_header("Content-Type", "application/json")
+    for name, value in (headers or {}).items():
+        request.add_header(name, value)
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:
             return response.status, response.read().decode("utf-8", "replace")
@@ -317,13 +423,23 @@ def http_call(url: str, method: str = "GET", body: bytes | None = None, timeout:
         return 0, str(error)
 
 
+def home_headers() -> dict[str, str]:
+    node_id = (tailscale_self().get("nodeId") or "").strip()
+    if not node_id:
+        return {}
+    return {HOME_NODE_HEADER: node_id}
+
+
 def ping_heartbeat() -> None:
     sprite = sprite_base()
     secret = heartbeat_secret()
     if not sprite or not secret:
         log("heartbeat skipped (set SPRITE_URL and HEARTBEAT_SECRET)")
         return
-    code, text = http_call(f"{sprite}/heartbeat/{secret}", timeout=600)
+    code, text = http_call(f"{sprite}/heartbeat/{secret}", timeout=600, headers=home_headers())
+    if not apply_sprite_result(code, text):
+        log("heartbeat rejected")
+        return
     if code == 200:
         log(f"heartbeat {text.strip() or 'ok'}")
     elif code == 0:
@@ -367,10 +483,14 @@ def pull_catalog() -> None:
 
 
 def fire_due_routines(now: datetime | None = None) -> None:
+    if not clock_enabled():
+        return
     current = now or datetime.now(timezone.utc)
     routines = load_routines()
     changed = False
     for item in routines:
+        if not clock_enabled():
+            break
         if not routine_due(item, current):
             continue
         result = fire_routine(item)
@@ -415,7 +535,15 @@ def fire_routine(item: dict[str, Any]) -> str:
             "mode": item.get("mode") or "silent",
         }
     ).encode("utf-8")
-    code, text = http_call(f"{sprite}/routine/{secret}", method="POST", body=payload, timeout=600)
+    code, text = http_call(
+        f"{sprite}/routine/{secret}",
+        method="POST",
+        body=payload,
+        timeout=600,
+        headers=home_headers(),
+    )
+    if not apply_sprite_result(code, text):
+        return "unregistered"
     if code == 200 and text.strip() == "busy":
         item["retryAfter"] = time.time() + BUSY_RETRY_SECONDS
         return "busy"
@@ -426,15 +554,138 @@ def fire_routine(item: dict[str, Any]) -> str:
     return f"HTTP {code}" if code else text
 
 
-def advertise_exit_node() -> None:
+def set_advertise_exit_node(enabled: bool) -> None:
     binary = tailscale_bin()
     if not binary:
         log("tailscale missing")
         return
+    flag = "--advertise-exit-node" if enabled else "--advertise-exit-node=false"
     try:
-        subprocess.run([binary, "set", "--advertise-exit-node"], check=False, capture_output=True, timeout=20)
+        subprocess.run([binary, "set", flag], check=False, capture_output=True, timeout=20)
     except Exception as error:
         log(f"tailscale advertise failed ({error})")
+
+
+def advertise_exit_node() -> None:
+    set_advertise_exit_node(True)
+
+
+def unadvertise_exit_node() -> None:
+    set_advertise_exit_node(False)
+
+
+def tailscale_status() -> dict[str, Any]:
+    binary = tailscale_bin()
+    if not binary:
+        return {}
+    try:
+        raw = subprocess.check_output([binary, "status", "--json"], timeout=15)
+        data = json.loads(raw)
+    except Exception:
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def tailscale_self() -> dict[str, str]:
+    data = tailscale_status()
+    self_node = data.get("Self") if isinstance(data.get("Self"), dict) else {}
+    hostname = str(self_node.get("HostName") or "").strip()
+    dns = str(self_node.get("DNSName") or "").rstrip(".")
+    node_id = str(self_node.get("ID") or data.get("Self", {}).get("ID") or "").strip()
+    if not node_id:
+        # Tailscale status JSON uses the Peer map key as StableID; Self may only have HostName.
+        node_id = str(self_node.get("StableID") or hostname)
+    ips = self_node.get("TailscaleIPs") or []
+    ip = ""
+    for candidate in ips:
+        if str(candidate).startswith("100."):
+            ip = str(candidate)
+            break
+    if not ip and ips:
+        ip = str(ips[0])
+    return {"nodeId": node_id, "hostname": hostname or dns.split(".")[0], "ip": ip}
+
+
+def home_nodes() -> list[str]:
+    raw = os.environ.get("HOME_NODES", "")
+    return [part.strip() for part in raw.split(",") if part.strip()]
+
+
+def peer_ipv4(name: str) -> str | None:
+    want = name.strip().lower().rstrip(".")
+    data = tailscale_status()
+    peers = data.get("Peer") if isinstance(data.get("Peer"), dict) else {}
+    for peer in peers.values():
+        if not isinstance(peer, dict):
+            continue
+        host = str(peer.get("HostName") or "").strip().lower()
+        dns = str(peer.get("DNSName") or "").rstrip(".").lower()
+        if want not in {host, dns} and not dns.startswith(f"{want}."):
+            continue
+        for candidate in peer.get("TailscaleIPs") or []:
+            if str(candidate).startswith("100."):
+                return str(candidate)
+    return None
+
+
+def demote_peers(self_hostname: str) -> None:
+    secret = heartbeat_secret()
+    if not secret:
+        return
+    self_name = self_hostname.strip().lower()
+    port = env_int("HOME_DAEMON_PORT", DEFAULT_PORT)
+    for name in home_nodes():
+        if name.strip().lower() == self_name:
+            continue
+        ip = peer_ipv4(name)
+        if not ip:
+            log(f"peer {name} has no Tailscale IP; skipped demote")
+            continue
+        code, text = http_call(
+            f"http://{ip}:{port}/role",
+            method="POST",
+            body=json.dumps({"role": ROLE_STANDBY}).encode("utf-8"),
+            timeout=10,
+            headers={"Authorization": f"Bearer {secret}"},
+        )
+        if code == 200:
+            log(f"demoted {name}")
+        else:
+            log(f"demote {name} failed ({code or text})")
+
+
+def register_home() -> int:
+    sprite = sprite_base()
+    secret = heartbeat_secret()
+    if not sprite or not secret:
+        log("set SPRITE_URL and HEARTBEAT_SECRET before register")
+        return 1
+    identity = tailscale_self()
+    node_id = identity.get("nodeId") or ""
+    hostname = identity.get("hostname") or ""
+    if not node_id or not hostname:
+        log("tailscale is not up; cannot register")
+        return 1
+    write_role(ROLE_ACTIVE)
+    advertise_exit_node()
+    demote_peers(hostname)
+    payload = json.dumps({"nodeId": node_id, "hostname": hostname}).encode("utf-8")
+    code, text = http_call(f"{sprite}/home/{secret}", method="POST", body=payload, timeout=30)
+    if code != 200:
+        log(f"sprite register failed ({code or text})")
+        return 1
+    pull_catalog()
+    log(f"registered {hostname} as the home clock")
+    log(f"optional fallback in repo .env: TAILSCALE_EXIT_NODE={hostname}")
+    log("add this hostname to HOME_NODES if it is missing")
+    return 0
+
+
+def standby_home() -> int:
+    write_role(ROLE_STANDBY)
+    unadvertise_exit_node()
+    log("this box is standby (not the clock)")
+    return 0
 
 
 def tailscale_bin() -> str | None:
@@ -455,19 +706,8 @@ def tailscale_bin() -> str | None:
 
 
 def tailscale_ipv4() -> str | None:
-    binary = tailscale_bin()
-    if not binary:
-        return None
-    try:
-        raw = subprocess.check_output([binary, "status", "--json"], timeout=15)
-        data = json.loads(raw)
-    except Exception:
-        return None
-    ips = ((data.get("Self") or {}).get("TailscaleIPs")) or []
-    for ip in ips:
-        if str(ip).startswith("100."):
-            return str(ip)
-    return str(ips[0]) if ips else None
+    ip = tailscale_self().get("ip") or ""
+    return ip or None
 
 
 def bind_host() -> str:
@@ -494,18 +734,25 @@ def start_http() -> ThreadingHTTPServer | None:
 def run_daemon() -> None:
     interval = env_int("HEARTBEAT_INTERVAL_SECONDS", DEFAULT_INTERVAL)
     last_heartbeat = 0.0
+    ensure_role()
     server = start_http()
-    log("home daemon running")
+    log(f"home daemon running role={read_role() or ROLE_STANDBY}")
     while True:
-        advertise_exit_node()
-        now = time.time()
-        if now - last_heartbeat >= interval:
-            ping_heartbeat()
-            pull_catalog()
-            last_heartbeat = now
-            if server is None:
-                server = start_http()
-        fire_due_routines()
+        role = read_role() or ROLE_STANDBY
+        if clock_enabled(role):
+            advertise_exit_node()
+            now = time.time()
+            if now - last_heartbeat >= interval:
+                ping_heartbeat()
+                if clock_enabled():
+                    pull_catalog()
+                last_heartbeat = now
+            if clock_enabled():
+                fire_due_routines()
+        else:
+            unadvertise_exit_node()
+        if server is None:
+            server = start_http()
         time.sleep(20)
 
 
@@ -524,6 +771,29 @@ def self_test() -> int:
     assert cron_matches("0 0 1 * 1", monday, DEFAULT_TZ)
     assert validate_cron("every monday") is not None
     assert validate_cron("0 8 * * 1") is None
+    assert clock_enabled(ROLE_ACTIVE)
+    assert not clock_enabled(ROLE_STANDBY)
+    previous = os.environ.get("PI_PERSONAL_HOME_DIR")
+    with tempfile.TemporaryDirectory() as tmp:
+        os.environ["PI_PERSONAL_HOME_DIR"] = tmp
+        assert ensure_role() == ROLE_STANDBY
+        assert read_role() == ROLE_STANDBY
+    with tempfile.TemporaryDirectory() as tmp:
+        os.environ["PI_PERSONAL_HOME_DIR"] = tmp
+        with open(os.path.join(tmp, "env"), "w", encoding="utf-8") as handle:
+            handle.write("SPRITE_URL=https://example.sprites.app\n")
+        assert ensure_role() == ROLE_ACTIVE
+        assert read_role() == ROLE_ACTIVE
+        write_role(ROLE_ACTIVE)
+        assert apply_sprite_result(409, UNREGISTERED_BODY) is False
+        assert read_role() == ROLE_STANDBY
+        write_role(ROLE_ACTIVE)
+        assert apply_sprite_result(200, "ok") is True
+        assert read_role() == ROLE_ACTIVE
+    if previous is None:
+        os.environ.pop("PI_PERSONAL_HOME_DIR", None)
+    else:
+        os.environ["PI_PERSONAL_HOME_DIR"] = previous
     log("home-daemon self-test ok")
     return 0
 
@@ -535,7 +805,11 @@ def main(argv: list[str]) -> int:
     if command == "daemon":
         run_daemon()
         return 0
-    log("Usage: home-daemon.py [daemon|self-test]")
+    if command == "register":
+        return register_home()
+    if command == "standby":
+        return standby_home()
+    log("Usage: home-daemon.py [daemon|self-test|register|standby]")
     return 2
 
 

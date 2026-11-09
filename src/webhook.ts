@@ -6,6 +6,7 @@ import { createDedupe, type Dedupe } from "./dedupe";
 import { webhookPath, webhookSecretOk } from "./early-typing";
 import { syncGoogleWorkspaceMcp } from "./google-mcp";
 import { handleHeartbeat } from "./heartbeat";
+import { handleHomeRegister } from "./home-registration";
 import { handleRoutineCatalog, handleRoutineFire } from "./routines";
 import { promptFromInbound, parseInbound } from "./inbound";
 import { promptWithLiveView, syncLiveViewFile } from "./live-view";
@@ -91,7 +92,12 @@ export async function createGateway(options: GatewayOptions): Promise<Gateway> {
         tailscale: options.tailscale,
       });
       if (dashboard) return dashboard;
-      const heartbeat = handleHeartbeat(request, {
+      const registered = await handleHomeRegister(request, {
+        config: options.config,
+        tailscale: options.tailscale,
+      });
+      if (registered) return registered;
+      const heartbeat = await handleHeartbeat(request, {
         config: options.config,
         pi: options.heartbeatPi ?? options.pi,
         sendblue: options.sendblue,

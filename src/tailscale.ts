@@ -22,6 +22,7 @@ export type TailscaleOptions = {
   stateDir: string;
   authKey?: string;
   exitNode?: string;
+  resolveExitNodeName?: () => string | undefined;
   socksPort?: number;
   hostname?: string;
   spawn?: SpawnFn;
@@ -50,9 +51,15 @@ export function createTailscale(options: TailscaleOptions): TailscaleService {
   let error: string | undefined;
   let daemon: ChildProcess | undefined;
   let exitNodeIp: string | undefined;
+  let usedExitNode: string | undefined;
+
+  function resolvedExitNode(): string | undefined {
+    const fromFile = options.resolveExitNodeName?.()?.trim();
+    return fromFile || options.exitNode;
+  }
 
   function configured(): boolean {
-    return Boolean(options.authKey && options.exitNode);
+    return Boolean(options.authKey && resolvedExitNode());
   }
 
   function status(): TailscaleStatus {
@@ -60,7 +67,7 @@ export function createTailscale(options: TailscaleOptions): TailscaleService {
       configured: configured(),
       running,
       hasAuthKey: Boolean(options.authKey),
-      exitNode: options.exitNode,
+      exitNode: usedExitNode ?? resolvedExitNode(),
       exitNodeIp: running ? exitNodeIp : undefined,
       socksUrl: running ? `socks5://127.0.0.1:${socksPort}` : undefined,
       error,
@@ -68,9 +75,13 @@ export function createTailscale(options: TailscaleOptions): TailscaleService {
   }
 
   async function start() {
-    if (running) return;
-    if (!options.authKey && !options.exitNode) return;
-    if (!options.authKey || !options.exitNode) {
+    const wanted = resolvedExitNode();
+    if (running) {
+      if (wanted && wanted === usedExitNode) return;
+      await stop();
+    }
+    if (!options.authKey && !wanted) return;
+    if (!options.authKey || !wanted) {
       error = "Set both TAILSCALE_AUTHKEY and TAILSCALE_EXIT_NODE (MacBook now, rpi later).";
       throw new Error(error);
     }
@@ -119,7 +130,7 @@ export function createTailscale(options: TailscaleOptions): TailscaleService {
         logs,
         "up",
       );
-      const picked = await resolveExitNode(tailscale, socket, options.exitNode, logs, sleep);
+      const picked = await resolveExitNode(tailscale, socket, wanted, logs, sleep);
       logs.push(`using exit node ${picked.name} at ${picked.ip}\n`);
       await runTailscale(
         tailscale,
@@ -128,6 +139,7 @@ export function createTailscale(options: TailscaleOptions): TailscaleService {
         "set --exit-node",
       );
       exitNodeIp = picked.ip;
+      usedExitNode = wanted;
       running = true;
     } catch (caught) {
       error = caught instanceof Error ? caught.message : String(caught);
@@ -142,6 +154,7 @@ export function createTailscale(options: TailscaleOptions): TailscaleService {
     stopping = true;
     running = false;
     exitNodeIp = undefined;
+    usedExitNode = undefined;
     const child = daemon;
     daemon = undefined;
     if (child && child.exitCode === null) {

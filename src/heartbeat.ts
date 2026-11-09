@@ -1,4 +1,5 @@
 import type { Config } from "./config";
+import { rejectForeignHome } from "./home-registration";
 import { promptWithLiveView, syncLiveViewFile } from "./live-view";
 import type { PiAgent } from "./pi";
 import type { GatewayResult } from "./result";
@@ -82,7 +83,10 @@ export type HeartbeatOptions = {
   now?: () => Date;
 };
 
-export function handleHeartbeat(request: Request, options: HeartbeatOptions): GatewayResult | undefined {
+export async function handleHeartbeat(
+  request: Request,
+  options: HeartbeatOptions,
+): Promise<GatewayResult | undefined> {
   const path = heartbeatPath(options.config);
   if (!path) return undefined;
   const url = new URL(request.url);
@@ -90,6 +94,8 @@ export function handleHeartbeat(request: Request, options: HeartbeatOptions): Ga
   if (request.method !== "GET" && request.method !== "POST") {
     return { status: 405, body: "method not allowed" };
   }
+  const blocked = await rejectForeignHome(request, options.config.agentCwd);
+  if (blocked) return blocked;
   if (options.isBusy()) {
     return { status: 200, body: "busy" };
   }

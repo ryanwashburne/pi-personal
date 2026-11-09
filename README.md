@@ -41,15 +41,29 @@ The Sprite already hosts HTTP on port 8080. The settings page is the same public
 
 `provision.sh` writes `SPRITE_URL` into `.env`. The gateway copies the live-view URL into gitignored `agent/live-view.md` and prefixes it on each Pi prompt, so when Chrome needs you, Pi can iMessage that link as a bare URL.
 
-To make Sprite Chrome look like your house IP, and to wake the Sprite on a timer for a quiet heartbeat, run one installer on whichever box stays at home (MacBook for a first test, Raspberry Pi when you want it always on):
+To make Sprite Chrome look like your house IP, and to wake the Sprite on a timer for a quiet heartbeat, install the home daemon on the boxes that live on your tailnet. **Only one box is registered** as the clock (heartbeat + crons) and the Chrome exit node.
+
+**First deploy**
 
 ```bash
-./scripts/install-home.sh
+./scripts/provision.sh
+./scripts/install-home.sh            # this box: Tailscale + API, standby
+./scripts/install-home.sh register   # this box becomes the clock
 ```
 
-That advertises this machine as a Tailscale **exit node** and, if `SPRITE_URL` and `HEARTBEAT_SECRET` are set, pings `/heartbeat/$HEARTBEAT_SECRET` every 2 hours (`HEARTBEAT_INTERVAL_SECONDS`). Each ping is a full Pi turn that can scan mail and calendar; the Sprite still sleeps between pings. Quiet hours (22:00–08:00 America/New_York) still run the turn but do not iMessage. The same daemon stores owner-defined **routines** (plain language → 5-field cron) and POSTs `/routine/$HEARTBEAT_SECRET` when they fire. Re-run `./scripts/install-home.sh` after provision so the Pi/Mac picks up the Python scheduler. A Mac LaunchAgent only runs while you are logged in — lid closed, pings stop until a Raspberry Pi (or another always-on box) takes over. Re-run the same command to update. `uninstall` stops the daemon. If an older install wrote `1800` into `~/.pi-personal-home/env`, set `HEARTBEAT_INTERVAL_SECONDS=7200` and re-run.
+Then in the Tailscale admin console: **Use as exit node** and **Disable key expiry**. Put a reusable, non-ephemeral `TAILSCALE_AUTHKEY` in `.env`. After register, the Sprite stores the hostname in gitignored `agent/memory/home.json`; `TAILSCALE_EXIT_NODE` is only a fallback until that file exists. Re-run `./scripts/provision.sh` so the Sprite has the auth key. List every home hostname in `HOME_NODES` (comma-separated) so later provisions can update them.
 
-It prints the `TAILSCALE_EXIT_NODE` value (hostname is fine). Put a reusable, non-ephemeral `TAILSCALE_AUTHKEY` in `.env` once — that key is for the Sprite, not the home box. Re-run `./scripts/provision.sh`. The Sprite looks up that name in `tailscale status --json` and sets the exit node by its `100.x` address (MagicDNS is off so a hostname often fails). Only Chromium uses the SOCKS proxy — Sendblue and the live-view URL stay on Fly. The exit node must stay on while Chrome needs the home IP.
+**Incremental deploy** (code only — does not change who is registered):
+
+```bash
+./scripts/provision.sh
+```
+
+That updates the Sprite, then `scripts/sync-home.sh` copies the daemon onto this machine (if `~/.pi-personal-home` exists) and every `HOME_NODES` host. `install-home.sh update` keeps `role`. `REGISTER_WEBHOOK=1` stays opt-in.
+
+If `SPRITE_URL` and `HEARTBEAT_SECRET` are set, the **registered** box pings `/heartbeat/$HEARTBEAT_SECRET` every 2 hours (`HEARTBEAT_INTERVAL_SECONDS`). Each ping is a full Pi turn that can scan mail and calendar; the Sprite still sleeps between pings. Quiet hours (22:00–08:00 America/New_York) still run the turn but do not iMessage. The same daemon stores owner-defined **routines** (plain language → 5-field cron) and POSTs `/routine/$HEARTBEAT_SECRET` when they fire. A Mac LaunchAgent only runs while you are logged in — lid closed, pings stop until you `register` an always-on Raspberry Pi. `standby` demotes this box without uninstalling. `uninstall` stops the daemon (and writes standby so a later install does not steal the clock). If an older install wrote `1800` into `~/.pi-personal-home/env`, set `HEARTBEAT_INTERVAL_SECONDS=7200` and re-run `update`. Existing installs that have an `env` file but no `role` file are grandfathered as the active clock.
+
+The Sprite looks up the registered hostname in `tailscale status --json` and sets the exit node by its `100.x` address (MagicDNS is off so a hostname often fails). Only Chromium uses the SOCKS proxy — Sendblue and the live-view URL stay on Fly. Heartbeat and routine fires from any other node id are rejected with 409 before a Pi turn.
 
 The iMessage agent does **not** run on the home box. Do not install the gateway, Sendblue, or Chrome there. Hardware, forgotten-login recovery, and moving the daemon to a Pi are in [Raspberry Pi (home exit node)](#raspberry-pi-home-exit-node).
 
@@ -106,17 +120,18 @@ You only need a Linux box that stays powered on house internet and advertises a 
 
 Locked out or dead card: [Raspberry Pi Imager](https://www.raspberrypi.com/software/) → Raspberry Pi OS Lite, enable SSH, set a user, prefill Wi-Fi if you have no ethernet, flash, boot, then:
 
-If you already ran `./scripts/install-home.sh` on the Mac:
+If you already ran `./scripts/install-home.sh` on the Mac, enroll the Pi as standby then move the clock:
 
 ```bash
 scp ~/.pi-personal-home/env ~/.pi-personal-home/install-home.sh ~/.pi-personal-home/home-daemon.py USER@raspberrypi.local:
 ssh USER@raspberrypi.local
 sudo bash install-home.sh
+sudo bash install-home.sh register
 ```
 
-Or copy `scripts/install-home.sh` from this repo and export `SPRITE_URL` / `HEARTBEAT_SECRET` (or put them in `env` next to the script). On Linux it must be `sudo` so the service starts at boot.
+The Mac stays installed so the next `./scripts/provision.sh` can update it; it is demoted to standby. Or copy `scripts/install-home.sh` from this repo and export `SPRITE_URL` / `HEARTBEAT_SECRET` (or put them in `env` next to the script). On Linux it must be `sudo` so the service starts at boot.
 
-The installer installs Tailscale if needed, turns on IP forwarding, advertises an exit node, enables Tailscale SSH, and starts the heartbeat + routines scheduler. Then in the admin console: **Use as exit node** and **Disable key expiry**. Set `TAILSCALE_EXIT_NODE` to the hostname it prints, keep `TAILSCALE_AUTHKEY`, provision again. Optional stable name: `TS_HOSTNAME=rpi-home sudo bash install-home.sh`.
+The installer installs Tailscale if needed, turns on IP forwarding, enables Tailscale SSH, and starts the daemon. `register` advertises the exit node, tells the Sprite this node is the clock, and demotes other `HOME_NODES`. Then in the admin console: **Use as exit node** and **Disable key expiry**. Keep `TAILSCALE_AUTHKEY`. Optional stable name: `TS_HOSTNAME=rpi-home sudo bash install-home.sh`. Add both hostnames to `HOME_NODES` in `.env`.
 
 ## Local checks
 
@@ -131,8 +146,9 @@ The gateway can also run on your laptop (`bun start`) with the same `.env` if yo
 - `src/` — webhook gateway (Bun), including the settings live-view browser
 - `agent/` — Pi working tree (`SYSTEM.md`, notes, `chrome.md`). Copied to `/home/sprite/agent` on the Sprite
 - `scripts/provision.sh` — create/update the Sprite; installs Google Chrome, Xvfb, x11vnc, Tailscale if missing, and CC Safety Net into Pi; enables Sendblue auto-typing
-- `scripts/install-home.sh` — Mac or Raspberry Pi: Tailscale exit node + Sprite heartbeat ping + routines
+- `scripts/install-home.sh` — Mac or Raspberry Pi: Tailscale + Sprite heartbeat ping + routines (`install` / `update` / `register` / `standby`)
 - `scripts/home-daemon.py` — scheduler the home installer runs (stdlib Python)
+- `scripts/sync-home.sh` — provision helper: update every `HOME_NODES` daemon without changing role
 - `scripts/setup-macos-exit-node.sh` / `scripts/setup-rpi-exit-node.sh` — aliases for `install-home.sh`
 - `AGENTS.md` — instructions for coding agents
 - `.env.example` — names of required secrets, no real values
@@ -145,8 +161,8 @@ The gateway can also run on your laptop (`bun start`) with the same `.env` if yo
 - `agent/browser-profile/` (Chromium logins and cookies)
 - `agent/logins.md` (site usernames and passwords)
 - `agent/live-view.md` (public live-view URL; embeds `DASHBOARD_SECRET`)
-- `agent/memory/NOTES.md`, `agent/memory/HEARTBEAT-STATE.md`, and `agent/memory/routines.json` (personal Sprite notes / schedules)
+- `agent/memory/NOTES.md`, `agent/memory/HEARTBEAT-STATE.md`, `agent/memory/routines.json`, and `agent/memory/home.json` (personal Sprite notes / schedules / registered home box)
 - Pi `auth.json` / provider credentials
 - `~/.pi/agent/google-oauth.json` (Google MCP tokens on the Sprite)
 
-Access control for the live agent is the unguessable webhook path, the Sendblue signing secret, the phone allowlist in `.env`, the unguessable settings path (that same path is the only lock on the streamed browser), and the unguessable heartbeat/routine path the home daemon curls. Sendblue keys stay in the gateway. Pi does not get a “text anyone” tool. The home daemon API is Tailscale-only and uses the same `HEARTBEAT_SECRET`.
+Access control for the live agent is the unguessable webhook path, the Sendblue signing secret, the phone allowlist in `.env`, the unguessable settings path (that same path is the only lock on the streamed browser), and the unguessable heartbeat/routine/home-register path the home daemon curls. Sendblue keys stay in the gateway. Pi does not get a “text anyone” tool. The home daemon API is Tailscale-only and uses the same `HEARTBEAT_SECRET`. Only the registered node id may run heartbeat or routines.

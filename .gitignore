@@ -21,6 +21,7 @@ agent/memory/NOTES.md
 agent/memory/HEARTBEAT-STATE.md
 agent/memory/routines.json
 agent/memory/routines/
+agent/memory/home.json
 browser-bin/
 tailscale-state/
 /.pi/
