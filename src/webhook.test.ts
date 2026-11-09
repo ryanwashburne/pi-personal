@@ -54,6 +54,7 @@ async function setup() {
       async stop() {},
     },
     dedupe: await createDedupe(join(dir, "processed.json")),
+    browserMcp: false,
     async hold() {
       return { async heartbeat() {}, async release() {} };
     },

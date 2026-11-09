@@ -5,11 +5,13 @@ import { join } from "node:path";
 import {
   addHttpMcpServer,
   addHttpMcpServers,
+  BROWSER_MCP_NAME,
   listMcpServers,
   listMcpServersFrom,
   migrateUserMcpToProject,
   removeMcpServer,
   syncMcpConfigFiles,
+  upsertStdioMcpServer,
   validateMcpName,
 } from "./mcp-config";
 
@@ -91,4 +93,26 @@ test("removes an MCP server", async () => {
   await addHttpMcpServer(path, { name: "docs", url: "https://docs.example/mcp" });
   expect(await removeMcpServer(path, "docs")).toBe(true);
   expect(await listMcpServers(path)).toEqual([]);
+});
+
+test("upserts a stdio Playwright MCP server and refuses to remove it", async () => {
+  const path = await tempMcp();
+  await upsertStdioMcpServer(path, {
+    name: BROWSER_MCP_NAME,
+    command: "/usr/bin/bun",
+    args: ["src/playwright-mcp.ts"],
+  });
+  expect(await listMcpServers(path)).toEqual([
+    {
+      name: "playwright",
+      kind: "stdio",
+      target: "/usr/bin/bun src/playwright-mcp.ts",
+      hasAuth: false,
+    },
+  ]);
+  expect(await removeMcpServer(path, BROWSER_MCP_NAME)).toBe(false);
+  expect(await listMcpServers(path)).toHaveLength(1);
+  await expect(
+    addHttpMcpServer(path, { name: BROWSER_MCP_NAME, url: "https://example.com/mcp" }),
+  ).rejects.toThrow(/reserved/);
 });

@@ -4,6 +4,7 @@ import { BROWSER_CDP_PORT, browserProfileDir } from "./browser-session";
 import type { Config } from "./config";
 import {
   addHttpMcpServers,
+  isBuiltinMcpServer,
   listMcpServersFrom,
   mcpConfigPaths,
   removeMcpServers,
@@ -88,6 +89,9 @@ export async function handleDashboard(
       const bearerToken = String(form.get("token") ?? "");
       const nameError = validateMcpName(name);
       if (nameError) return redirect(path, undefined, nameError);
+      if (isBuiltinMcpServer(name)) {
+        return redirect(path, undefined, "Name playwright is reserved for Sprite Chromium.");
+      }
       const urlError = validateMcpUrl(mcpUrl);
       if (urlError) return redirect(path, undefined, urlError);
       try {
@@ -104,6 +108,9 @@ export async function handleDashboard(
     }
     case "remove": {
       const name = String(form.get("name") ?? "");
+      if (isBuiltinMcpServer(name)) {
+        return redirect(path, undefined, "Playwright is built in so Pi can drive the Sprite browser.");
+      }
       try {
         const removed = await removeMcpServers(configMcpPaths(options.config), name);
         if (!removed) return redirect(path, undefined, `No server named ${name}.`);
@@ -239,7 +246,7 @@ function page(
   const provider = config.piProvider ?? "Pi default";
   const rows = servers.length
     ? servers.map((server) => serverRow(server)).join("")
-    : `<tr><td colspan="4" class="empty">None configured. Paste your MCP URL below — Pi does not ship with any servers.</td></tr>`;
+    : `<tr><td colspan="4" class="empty">Playwright is always on for Sprite Chromium. Add more HTTP MCP servers below.</td></tr>`;
 
   return `<!doctype html>
 <html lang="en">
@@ -298,7 +305,7 @@ function page(
     </table>
 
     <h2>Add HTTP MCP</h2>
-    <p class="hint">Paste the streamable HTTP URL (usually ending in <code>/mcp</code>). Saved to both MCP files with <code>exposure: direct</code> so tools are declared to the model. Optional bearer token stays on the Sprite, not in git.</p>
+    <p class="hint">Playwright is built in and attaches to this Chromium over CDP. Paste extra streamable HTTP URLs (usually ending in <code>/mcp</code>). Saved to both MCP files with <code>exposure: direct</code> so tools are declared to the model. Optional bearer token stays on the Sprite, not in git.</p>
     <form class="stack" method="post">
       <input type="hidden" name="action" value="add">
       <label>Name
@@ -328,7 +335,7 @@ function browserSection(config: Config, browser: BrowserStatus): string {
       : "";
   return `
     <h2>Browser</h2>
-    <p class="lede">One Chromium on this Sprite. Log in on the live view — never text passwords. Cookies stay in <code>browser-profile</code> across sleeps. Optional Tailscale exit node (MacBook now, rpi later) makes sites see your home IP.</p>
+    <p class="lede">Pi starts this Chromium when a text needs the web, then Playwright MCP drives it. The live view streams that same window — log in here, never text passwords. Cookies stay in <code>browser-profile</code> across sleeps. Start from this page if you want the Sprite held awake for MFA; an agent start does not block sleep.</p>
     <table>
       <tr><th>Status</th><td>${escapeHtml(state)}</td></tr>
       <tr><th>Profile</th><td><code>${escapeHtml(browser.profileDir)}</code></td></tr>
@@ -352,7 +359,7 @@ function browserSection(config: Config, browser: BrowserStatus): string {
       </form>
       <a href="${escapeHtml(viewer)}">Open live view</a>
     </p>
-    <p class="hint">The live view streams this Chromium into this site. Paste (⌘V / Ctrl+V) works there — never text passwords. Keep that tab open while you log in so the Sprite stays awake.</p>`;
+    <p class="hint">The live view streams this Chromium into this site. Paste (⌘V / Ctrl+V) works there — never text passwords. Keep that tab open while you log in so the Sprite stays awake. An agent-started browser does not hold the Sprite after the reply.</p>`;
 }
 
 function tailscaleSection(tailscale: TailscaleStatus): string {
@@ -512,16 +519,21 @@ function viewerScript(wsPath: string): string {
 }
 
 function serverRow(server: ListedMcpServer): string {
+  const builtin = isBuiltinMcpServer(server.name);
   return `<tr>
     <td><code>${escapeHtml(server.name)}</code></td>
     <td><code>${escapeHtml(server.target)}</code></td>
-    <td>${server.hasAuth ? "yes" : "no"}</td>
+    <td>${builtin ? "built-in" : server.hasAuth ? "yes" : "no"}</td>
     <td>
-      <form class="row-form" method="post">
+      ${
+        builtin
+          ? ""
+          : `<form class="row-form" method="post">
         <input type="hidden" name="action" value="remove">
         <input type="hidden" name="name" value="${escapeHtml(server.name)}">
         <button type="submit">Remove</button>
-      </form>
+      </form>`
+      }
     </td>
   </tr>`;
 }

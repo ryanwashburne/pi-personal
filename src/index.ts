@@ -1,9 +1,11 @@
 import { join } from "node:path";
 import { attachVncWebSocket, toBuffer, vncProtocolHeaders, type VncProxy } from "./vnc-proxy";
+import { handleBrowserEnsure } from "./browser-ensure";
 import { createBrowserSession } from "./browser-session";
 import { loadConfig } from "./config";
 import { browserWsPath } from "./dashboard";
 import { createPiAgent } from "./pi";
+import { internalListenPort } from "./playwright-mcp";
 import { createSendblueClient } from "./sendblue";
 import { createTailscale } from "./tailscale";
 import { createGateway } from "./webhook";
@@ -11,6 +13,8 @@ import { createGateway } from "./webhook";
 const proxies = new WeakMap<object, VncProxy>();
 
 const config = loadConfig();
+const internalPort = internalListenPort();
+process.env.INTERNAL_PORT = String(internalPort);
 const pi = createPiAgent(config);
 const tailscale = createTailscale({
   stateDir: join(process.cwd(), "tailscale-state"),
@@ -35,6 +39,15 @@ const gateway = await createGateway({
   tailscale,
 });
 const wsPath = browserWsPath(config);
+
+const internal = Bun.serve({
+  hostname: "127.0.0.1",
+  port: internalPort,
+  async fetch(request) {
+    const result = await handleBrowserEnsure(request, browser);
+    return new Response(result.body, { status: result.status, headers: result.headers });
+  },
+});
 
 const server = Bun.serve({
   port: config.port,
@@ -96,13 +109,15 @@ const server = Bun.serve({
   },
 });
 
-console.log(`pi-personal listening on :${server.port}`);
+console.log(`pi-personal listening on :${server.port}; browser ensure on 127.0.0.1:${internal.port}`);
 
 process.on("SIGTERM", () => {
   void (async () => {
     await browser.stop();
     await tailscale.stop();
     await pi.stop();
+    server.stop();
+    internal.stop();
     process.exit(0);
   })();
 });

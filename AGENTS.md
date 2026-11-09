@@ -40,4 +40,4 @@ Do not commit unless asked. Do not push unless asked.
 - Do not read `.env` or print tokens, API keys, phone numbers, or `DASHBOARD_SECRET`.
 - Do not commit `.env`, `agent/logins.md`, `agent/browser-profile/`, `agent/sessions/`, or `agent/state/`.
 - Do not put the owner’s 1Password Personal/Private vault or the 1Password browser extension on the Sprite.
-- Do not ask the owner to iMessage a password. Logins happen on the settings-page live view.
+- Do not ask the owner to iMessage a password. Logins happen on the settings-page live view, or Pi fills them with Playwright MCP from `logins.md`.
