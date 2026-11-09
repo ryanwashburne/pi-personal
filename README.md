@@ -40,13 +40,16 @@ The Sprite already hosts HTTP on port 8080. The settings page is the same public
 
 `provision.sh` writes `SPRITE_URL` into `.env`. The gateway copies the live-view URL into gitignored `agent/live-view.md` and prefixes it on each Pi prompt, so when Chrome needs you, Pi can iMessage that link as a bare URL.
 
-To make Sprite Chrome look like your house IP, run a Tailscale **exit node** at home. Start on the MacBook; later point the same env at the rpi.
+To make Sprite Chrome look like your house IP, run a Tailscale **exit node** at home. The MacBook works for a first test; the Raspberry Pi is the always-on box.
 
 ```bash
-./scripts/setup-macos-exit-node.sh
+./scripts/setup-macos-exit-node.sh   # Mac, for a first test
+./scripts/setup-rpi-exit-node.sh     # on the Pi, when you want it always on
 ```
 
-That script advertises the Mac as an exit node and prints the `TAILSCALE_AUTHKEY` / `TAILSCALE_EXIT_NODE` values to put in `.env`. Re-run `./scripts/provision.sh`. The Sprite looks up that name in `tailscale status --json` and sets the exit node by its `100.x` address (MagicDNS is off so a hostname often fails). Only Chromium uses the SOCKS proxy — Sendblue and the live-view URL stay on Fly. When the rpi is ready, advertise it as an exit node, set `TAILSCALE_EXIT_NODE` to the rpi name, provision again. The Mac (or rpi) must stay on while Chrome needs the home IP.
+Each script advertises that machine as an exit node and prints the `TAILSCALE_EXIT_NODE` value (hostname is fine). Put a reusable, non-ephemeral `TAILSCALE_AUTHKEY` in `.env` once — that key is for the Sprite, not the Pi. Re-run `./scripts/provision.sh`. The Sprite looks up that name in `tailscale status --json` and sets the exit node by its `100.x` address (MagicDNS is off so a hostname often fails). Only Chromium uses the SOCKS proxy — Sendblue and the live-view URL stay on Fly. The exit node must stay on while Chrome needs the home IP.
+
+The iMessage agent does **not** run on the Raspberry Pi. Do not install the gateway, Sendblue, or Chrome there. Hardware, forgotten-login recovery, and the on-device script are in [Raspberry Pi (home exit node)](#raspberry-pi-home-exit-node).
 
 Pi always reads `~/.pi/agent/mcp.json`. With `--approve` it also reads `.pi/mcp.json` in the agent workspace. The gateway writes a built-in Playwright stdio server into **both** so Pi can start Chromium and control it over CDP (`127.0.0.1:9222`). The settings page adds extra HTTP servers the same way, with `exposure: "direct"` so tools are declared to the model as `mcp__<name>__<tool>`. The settings page also runs `pi mcp list` so you can see connect errors instead of an empty tool list. An agent-started browser does not take the Sprite `browser` task hold — after the reply the Sprite can sleep and Chrome dies; cookies stay on disk. Start from settings if you want the box held awake for a live-view login.
 
@@ -65,6 +68,34 @@ Logs:
 sprite exec -- tail -f /.sprite/logs/services/gateway.log
 ```
 
+## Raspberry Pi (home exit node)
+
+You only need a Linux box that stays powered on house internet and advertises a Tailscale exit node. Ethernet is more reliable than Wi-Fi.
+
+**Hardware to gather** (model is printed on the board):
+
+- The Pi itself (3 / 4 / 5 is plenty; a Zero W works but prefer ethernet)
+- Matching power supply: Pi 5 USB-C 5V/5A, Pi 4 USB-C 5V/3A, Pi 3 / Zero micro-USB 5V/~2.5A
+- The microSD already in it, or a fresh 16GB+ card
+- Ethernet cable (preferred) or the home Wi-Fi SSID and password
+- If you cannot SSH in: HDMI (micro-HDMI on Pi 4/5, full-size on Pi 3) plus a USB keyboard
+
+**If you forgot the old setup**, try in this order before flashing:
+
+1. [Tailscale machines](https://login.tailscale.com/admin/machines) — it may still be on the tailnet
+2. Router DHCP list, then `ping raspberrypi.local`
+3. Old Raspberry Pi OS default was `pi` / `raspberry`; newer images have no default password (whatever you set in Imager)
+
+Locked out or dead card: [Raspberry Pi Imager](https://www.raspberrypi.com/software/) → Raspberry Pi OS Lite, enable SSH, set a user, prefill Wi-Fi if you have no ethernet, flash, boot, then:
+
+```bash
+scp scripts/setup-rpi-exit-node.sh USER@raspberrypi.local:
+ssh USER@raspberrypi.local
+sudo bash setup-rpi-exit-node.sh
+```
+
+The script installs Tailscale if needed, turns on IP forwarding, advertises an exit node, and enables Tailscale SSH. Then in the admin console: **Use as exit node** and **Disable key expiry**. Set `TAILSCALE_EXIT_NODE` to the hostname it prints, keep `TAILSCALE_AUTHKEY`, provision again. Optional stable name: `TS_HOSTNAME=rpi-home sudo bash setup-rpi-exit-node.sh`.
+
 ## Local checks
 
 ```bash
@@ -79,6 +110,7 @@ The gateway can also run on your laptop (`bun start`) with the same `.env` if yo
 - `agent/` — Pi working tree (`SYSTEM.md`, notes, `chrome.md`). Copied to `/home/sprite/agent` on the Sprite
 - `scripts/provision.sh` — create/update the Sprite; installs Google Chrome, Xvfb, x11vnc, and Tailscale if missing
 - `scripts/setup-macos-exit-node.sh` — run on the MacBook to advertise a Tailscale exit node
+- `scripts/setup-rpi-exit-node.sh` — run on the Raspberry Pi to advertise the always-on exit node
 - `AGENTS.md` — instructions for coding agents
 - `.env.example` — names of required secrets, no real values
 

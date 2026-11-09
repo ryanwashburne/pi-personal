@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Run this on the MacBook (not on the Sprite, not on the rpi).
 # Turns this Mac into a Tailscale exit node so Sprite Chrome can egress from home.
-# Later, do the same on the rpi and point TAILSCALE_EXIT_NODE at that name instead.
+# Later, run scripts/setup-rpi-exit-node.sh on the Pi and point TAILSCALE_EXIT_NODE at that name.
 set -euo pipefail
 
 if ! command -v tailscale >/dev/null 2>&1; then
@@ -44,6 +44,6 @@ echo "       TAILSCALE_EXIT_NODE=$NAME"
 echo "  5. ./scripts/provision.sh"
 echo
 echo "Leave this Mac awake on home internet while you test."
-echo "When the rpi is ready: advertise it as an exit node, approve it, set"
-echo "TAILSCALE_EXIT_NODE to the rpi name, re-run provision. The Sprite does not care"
-echo "which machine is the exit node."
+echo "When the rpi is ready: copy scripts/setup-rpi-exit-node.sh onto it, approve it"
+echo "as an exit node, set TAILSCALE_EXIT_NODE to the rpi hostname, re-run provision."
+echo "The Sprite does not care which machine is the exit node."

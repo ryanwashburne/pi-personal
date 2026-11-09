@@ -13,6 +13,7 @@ This git repo is public. Secrets stay in gitignored files on the Mac and on the 
 - `agent/imessage.md` — what Messages actually renders in Pi’s reply bubble (markdown does not)
 - `agent/chrome.md` — shared Sprite Chromium; live-view URL is generated into gitignored `agent/live-view.md`
 - `scripts/provision.sh` — create/update the Sprite and copy `.env` + `agent/logins.md`
+- `scripts/setup-macos-exit-node.sh` / `scripts/setup-rpi-exit-node.sh` — advertise a home Tailscale exit node (agent stays on the Sprite)
 
 ## Commands
 
