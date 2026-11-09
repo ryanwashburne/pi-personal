@@ -69,18 +69,7 @@ sprite exec -- bash -lc "cat > $REMOTE_APP/.env" < .env
 sprite exec -- bash -lc "grep -q AGENT_CWD= $REMOTE_APP/.env || echo AGENT_CWD=$REMOTE_AGENT >> $REMOTE_APP/.env"
 
 echo "Installing browser packages if needed..."
-sprite exec -- bash -lc 'if command -v Xvfb >/dev/null && command -v x11vnc >/dev/null && { command -v chromium >/dev/null || command -v chromium-browser >/dev/null || command -v google-chrome >/dev/null; }; then
-  echo "browser deps already present"
-  exit 0
-fi
-if ! command -v sudo >/dev/null; then
-  echo "sudo not available; install xvfb, x11vnc, and chromium on the Sprite by hand." >&2
-  exit 0
-fi
-sudo apt-get update -qq
-sudo DEBIAN_FRONTEND=noninteractive apt-get install -y xvfb x11vnc fonts-liberation fonts-noto-color-emoji dbus-x11
-sudo DEBIAN_FRONTEND=noninteractive apt-get install -y chromium || sudo DEBIAN_FRONTEND=noninteractive apt-get install -y chromium-browser
-'
+sprite exec -- bash "$REMOTE_APP/scripts/install-browser-deps.sh"
 
 echo "Installing gateway as a Sprite service..."
 sprite exec -- bash -lc "sprite-env services get gateway >/dev/null 2>&1 && sprite-env services delete gateway || true"

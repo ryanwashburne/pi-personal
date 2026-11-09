@@ -66,7 +66,7 @@ The gateway can also run on your laptop (`bun start`) with the same `.env` if yo
 
 - `src/` — webhook gateway (Bun), including the settings live-view browser
 - `agent/` — Pi working tree (`SYSTEM.md`, notes). Copied to `/home/sprite/agent` on the Sprite
-- `scripts/provision.sh` — create/update the Sprite; installs Chromium/Xvfb/x11vnc if missing
+- `scripts/provision.sh` — create/update the Sprite; installs Google Chrome, Xvfb, and x11vnc if missing (ignores Ubuntu’s snap stub)
 - `.env.example` — names of required secrets, no real values
 
 ## What must not be committed
