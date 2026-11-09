@@ -259,7 +259,7 @@ async function handleGoogleCallback(
   } catch (error) {
     return redirect(path, undefined, error instanceof Error ? error.message : String(error));
   }
-  return redirect(path, "Google Workspace connected. Pi will use Gmail, Calendar, and Drive on the next text.");
+  return redirect(path, "Google Workspace connected. Pi will use Gmail, Calendar, Drive, and Universal Search on the next text.");
 }
 
 async function disconnectGoogle(options: DashboardOptions, path: string): Promise<GatewayResult> {
@@ -522,14 +522,14 @@ function googleSection(
     : "";
   return `
     <h2>Google Workspace</h2>
-    <p class="lede">Official Gmail, Calendar, and Drive MCP servers. Sign in here once; Pi then calls them as <code>mcp__gmail__*</code>, <code>mcp__calendar__*</code>, and <code>mcp__drive__*</code>. Tokens stay on the Sprite, not in git.</p>
+    <p class="lede">Official Gmail, Calendar, Drive, and Universal Search MCP servers. Sign in here once; Pi then calls them as <code>mcp__gmail__*</code>, <code>mcp__calendar__*</code>, <code>mcp__drive__*</code>, and <code>mcp__search__*</code>. Tokens stay on the Sprite, not in git.</p>
     <table>
       <tr><th>Client</th><td>${google.configured ? "set" : "missing — set GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET"}</td></tr>
       <tr><th>Status</th><td>${escapeHtml(state)}</td></tr>
       ${redirect}
     </table>
     ${actions}
-    <p class="hint">In Google Cloud: enable Gmail, Calendar, Drive APIs and their MCP APIs; create a <strong>Web application</strong> OAuth client; check <strong>Use this client for an AI-powered agent</strong>; add the redirect URI above; paste the client ID/secret into <code>.env</code> and re-run <code>./scripts/provision.sh</code>. Consent-screen scopes: ${GOOGLE_OAUTH_SCOPES.map((scope) => `<code>${escapeHtml(scope)}</code>`).join(" ")}. Join the Workspace developer preview if Google still refuses MCP calls. Gmail MCP drafts mail and does not send it.</p>`;
+    <p class="hint">In Google Cloud: enable Gmail, Calendar, Drive APIs and their MCP APIs, plus <strong>Google Workspace MCP API</strong> (<code>workspacemcp.googleapis.com</code>); create a <strong>Web application</strong> OAuth client; check <strong>Use this client for an AI-powered agent</strong>; add the redirect URI above; paste the client ID/secret into <code>.env</code> and re-run <code>./scripts/provision.sh</code>. Consent-screen scopes: ${GOOGLE_OAUTH_SCOPES.map((scope) => `<code>${escapeHtml(scope)}</code>`).join(" ")}. Join the Workspace developer preview if Google still refuses MCP calls. Gmail MCP drafts mail and does not send it. Universal Search also reads Chat when those scopes are granted.</p>`;
 }
 
 function tailscaleSection(tailscale: TailscaleStatus): string {

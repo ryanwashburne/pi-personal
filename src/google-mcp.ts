@@ -35,6 +35,11 @@ export const GOOGLE_MCP_SERVERS: ReadonlyArray<{
     url: "https://drivemcp.googleapis.com/mcp/v1",
     description: "Google Drive: search, read, create, and copy files.",
   },
+  {
+    name: "search",
+    url: "https://workspacemcp.googleapis.com/mcp/v1",
+    description: "Universal Search: one query across Gmail, Calendar, Drive, and Chat.",
+  },
 ];
 
 export function googleTokenPathFor(config: Pick<Config, "googleOAuthTokenPath">): string {

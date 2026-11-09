@@ -495,7 +495,12 @@ test("Google OAuth callback writes MCP servers and restarts Pi", async () => {
     globalThis.fetch = originalFetch;
   }
   expect(restarts.length).toBeGreaterThan(0);
-  expect((await listMcpServers(mcpPath)).map((server) => server.name)).toEqual(["gmail", "calendar", "drive"]);
+  expect((await listMcpServers(mcpPath)).map((server) => server.name)).toEqual([
+    "gmail",
+    "calendar",
+    "drive",
+    "search",
+  ]);
   const tokens = JSON.parse(await Bun.file(join(dir, "google-oauth.json")).text()) as { refreshToken: string };
   expect(tokens.refreshToken).toBe("1//refresh");
 
@@ -503,6 +508,8 @@ test("Google OAuth callback writes MCP servers and restarts Pi", async () => {
   expect(page.body).toContain(">connected<");
   expect(page.body).toContain("Disconnect");
   expect(page.body).toContain("gmailmcp.googleapis.com");
+  expect(page.body).toContain("workspacemcp.googleapis.com");
+  expect(page.body).toContain("mcp__search__*");
   expect(page.body).not.toContain("1//refresh");
   expect(page.body).not.toContain("ya29.access");
 });

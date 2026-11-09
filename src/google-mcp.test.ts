@@ -37,12 +37,12 @@ const baseConfig: Config = {
   tailscaleSocksPort: 1055,
 };
 
-test("upserts Gmail, Calendar, and Drive MCP entries with a token command", async () => {
+test("upserts Gmail, Calendar, Drive, and Universal Search MCP entries with a token command", async () => {
   const dir = await mkdtemp(join(tmpdir(), "google-mcp-"));
   const path = join(dir, "mcp.json");
   await upsertGoogleMcpServers([path], "/bin/echo Bearer tok");
   const listed = await listMcpServers(path);
-  expect(listed.map((server) => server.name)).toEqual(["gmail", "calendar", "drive"]);
+  expect(listed.map((server) => server.name)).toEqual(["gmail", "calendar", "drive", "search"]);
   expect(listed.every((server) => server.hasAuth)).toBe(true);
   expect(listed.map((server) => server.target)).toEqual(GOOGLE_MCP_SERVERS.map((server) => server.url));
   const raw = JSON.parse(await readFile(path, "utf8")) as {
@@ -51,6 +51,10 @@ test("upserts Gmail, Calendar, and Drive MCP entries with a token command", asyn
   expect(raw.mcpServers.gmail.exposure).toBe("direct");
   expect(raw.mcpServers.gmail.description).toContain("Cannot send");
   expect(raw.mcpServers.gmail.headers?.Authorization).toBe("!/bin/echo Bearer tok");
+  expect(raw.mcpServers.search.description).toContain("Universal Search");
+  expect(listed.find((server) => server.name === "search")?.target).toBe(
+    "https://workspacemcp.googleapis.com/mcp/v1",
+  );
 });
 
 test("sync writes Google MCP servers only while a refresh token exists", async () => {
@@ -74,7 +78,12 @@ test("sync writes Google MCP servers only while a refresh token exists", async (
     expiresAt: Date.now() + 60 * 60_000,
   });
   expect(await syncGoogleWorkspaceMcp(config, [mcpPath], "/bin/echo Bearer tok")).toBe(true);
-  expect((await listMcpServers(mcpPath)).map((server) => server.name)).toEqual(["gmail", "calendar", "drive"]);
+  expect((await listMcpServers(mcpPath)).map((server) => server.name)).toEqual([
+    "gmail",
+    "calendar",
+    "drive",
+    "search",
+  ]);
 
   await removeGoogleMcpServers([mcpPath]);
   expect(await listMcpServers(mcpPath)).toEqual([]);

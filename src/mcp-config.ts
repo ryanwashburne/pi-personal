@@ -14,7 +14,7 @@ export type ListedMcpServer = {
 };
 
 export const BROWSER_MCP_NAME = "playwright";
-export const GOOGLE_MCP_NAMES = ["gmail", "calendar", "drive"] as const;
+export const GOOGLE_MCP_NAMES = ["gmail", "calendar", "drive", "search"] as const;
 export type GoogleMcpName = (typeof GOOGLE_MCP_NAMES)[number];
 
 export type AddHttpMcpServer = {
@@ -260,7 +260,7 @@ export function reservedMcpNameError(name: string): string {
     return `Name ${BROWSER_MCP_NAME} is reserved for Sprite Chromium.`;
   }
   if (isGoogleMcpServer(name)) {
-    return "gmail, calendar, and drive are reserved for Google Workspace. Connect them on this page.";
+    return "gmail, calendar, drive, and search are reserved for Google Workspace. Connect them on this page.";
   }
   return `Name ${name.trim()} is reserved.`;
 }

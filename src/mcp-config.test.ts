@@ -122,6 +122,9 @@ test("reserves Google Workspace MCP names unless allowReserved is set", async ()
   await expect(addHttpMcpServer(path, { name: "gmail", url: "https://example.com/mcp" })).rejects.toThrow(
     /reserved/,
   );
+  await expect(addHttpMcpServer(path, { name: "search", url: "https://example.com/mcp" })).rejects.toThrow(
+    /reserved/,
+  );
   await addHttpMcpServer(path, {
     name: "gmail",
     url: "https://gmailmcp.googleapis.com/mcp/v1",

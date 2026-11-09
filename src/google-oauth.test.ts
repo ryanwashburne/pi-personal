@@ -53,7 +53,11 @@ test("authorize URL asks for offline access, PKCE, and Workspace scopes", async 
   expect(url.searchParams.get("code_challenge")).toBeTruthy();
   expect(url.searchParams.get("scope")).toContain("gmail.readonly");
   expect(url.searchParams.get("scope")).toContain("calendar.events");
+  expect(url.searchParams.get("scope")).toContain("calendar.readonly");
   expect(url.searchParams.get("scope")).toContain("drive.file");
+  expect(url.searchParams.get("scope")).toContain("chat.messages.readonly");
+  expect(url.searchParams.get("scope")).toContain("chat.spaces.readonly");
+  expect(url.searchParams.get("scope")).toContain("chat.memberships.readonly");
   const pending = JSON.parse(await readFile(join(oauth.dir, "google-oauth-pending.json"), "utf8")) as {
     state: string;
   };
