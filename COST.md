@@ -2,7 +2,7 @@
 
 What this personal iMessage agent pays for, which vendors bill, and which actions burn money.
 
-This is a standing map, not a live invoice. There is no spend tool yet — do not invent a current balance, overage, or “you’re over budget” from these rates. When live usage tools exist, they will query the vendors; until then, this file is what Pi and coding agents should read before doing something expensive.
+This is a standing map of **rates**. Live numbers come from the `spend` tool (Pi extension). Call `spend` when the owner asks what this costs. Quote only what the tool returned. Do not invent a current balance from these rates.
 
 Last reviewed: 9 Nov 2026 (America/New_York). Vendor prices change. Live secrets (`.env`, invoices, API keys) are not documented here and must not be opened by coding agents. This file does not read `.env`, so it cannot know which model key is actually configured.
 
@@ -12,8 +12,8 @@ Last reviewed: 9 Nov 2026 (America/New_York). Vendor prices change. Live secrets
 | --- | --- | --- | --- |
 | Sendblue | Fixed, per dedicated iMessage line | **$100 / month** on the AI Agent plan. $0 per message. | The production path: dedicated number, webhooks, inbound-first replies to the allowlisted phone. |
 | Fly Sprites | Variable compute + always-on cold disk | CPU **$0.0385 / CPU-hour**. Memory **$0.021875 / GB-hour**. Hot storage **$0.000683 / GB-hour** (~$0.50 / GB-month) while awake. Cold storage **$0.000027 / GB-hour** (~$0.02 / GB-month) for as long as the Sprite exists. | The box Pi runs on. Compute stops when it sleeps. Disk (Tigris) does not. |
-| Anthropic API | Variable, per token | Haiku 5.5 **$0.10 / $0.50** per million input/output (prompts ≤100k; **$0.50 / $2.50** above). Sonnet 5.5 **$2 / $10**. Opus 5.5 **$4 / $20**. Fable 5.1 **$10 / $50**. | Intended model path (`pi auth login anthropic --api-key` or `ANTHROPIC_API_KEY`). Every turn sends the full session. |
-| OpenRouter (if used) | Variable, per token + credit fee | Provider list price. **5.5%** fee when buying Standard credits (8% Business). | Optional (`OPENROUTER_API_KEY`, `PI_PROVIDER=openrouter`). Two bills: OpenRouter credits and the upstream model. |
+| OpenRouter | Variable, per token + credit fee | Upstream list price. **5.5%** fee when buying Standard credits (8% Business). | **This app’s model path** (`OPENROUTER_API_KEY`, `PI_PROVIDER=openrouter`). Every turn sends the full session. The invoice is OpenRouter, not a direct Anthropic key. |
+| Claude models via OpenRouter | Same as Anthropic list | Haiku 5.5 **$0.10 / $0.50** per million input/output (prompts ≤100k; **$0.50 / $2.50** above). Sonnet 5.5 **$2 / $10**. Opus 5.5 **$4 / $20**. Fable 5.1 **$10 / $50**. | What OpenRouter charges for `anthropic/…` models. Not a separate Anthropic bill. |
 | OpenAI API (if used) | Variable, per token | Depends on the model (for example GPT-5 **$1.25 / $10** per million). | Optional (`OPENAI_API_KEY`). Only if Pi is pointed at OpenAI. |
 | Google Workspace APIs | Free under daily thresholds | Gmail / Calendar / Drive standard use is **$0**. Billing for over-threshold usage is planned later in 2026 with ≥90 days’ notice. | Local Sprite MCP (`mcp__gmail__*`, `mcp__calendar__*`, `mcp__drive__*`, `mcp__search__*`) after settings-page OAuth. |
 | Tailscale | $0 on Personal | Personal plan **free forever** (this app’s home exit node is one user). | Chrome egress only. Not on the Sendblue or webhook path. |
@@ -23,6 +23,20 @@ Last reviewed: 9 Nov 2026 (America/New_York). Vendor prices change. Live secrets
 Fly invoices under **$5** are waived; Sendblue is a separate bill, so a cheap Sprite month does not cancel the line. Tigris object storage for Sprite disk is billed **on the Fly invoice**, not a second account.
 
 Sources: [Sendblue pricing](https://www.sendblue.com/pricing) · [Fly pricing](https://fly.io/pricing) · [Sprites](https://fly.io/sprites/) · [Anthropic API pricing](https://platform.claude.com/docs/en/about-claude/pricing) · [OpenRouter pricing](https://openrouter.ai/pricing) · [OpenAI pricing](https://developers.openai.com/api/docs/pricing) · [Gmail API quotas](https://developers.google.com/workspace/gmail/api/reference/quota) · [Tailscale pricing](https://tailscale.com/pricing)
+
+## Live `spend` tool
+
+Pi’s `spend` tool (allowlisted in the gateway) is the only supported way to read live usage. It does **not** open `.env` as a file and does **not** return message bodies or full phone numbers.
+
+| Source | What you get | Needs |
+| --- | --- | --- |
+| `vendor=model` (default includes this) | This iMessage session’s Pi-recorded token $ on the current branch | Session JSONL under `SESSION_DIR` |
+| Sendblue | Line count, new-contact caps, published $100/line | Existing `SENDBLUE_*` keys |
+| OpenRouter (default includes this) | This key’s usage / remaining limit. Credits remaining if the key can call `GET /credits` | `OPENROUTER_API_KEY` |
+| Fly Sprites | Honest miss | Fly has no public billing API |
+| `vendor=anthropic` (opt-in only) | UTC-month org `cost_report` | Not this app’s bill. Default `spend` does not query it. |
+
+Session files stay on the CC Safety Net deny list so Pi cannot `read` transcripts. `spend` parses them itself and returns totals only.
 
 ## Sendblue: the big fixed cost
 
@@ -51,7 +65,7 @@ Do not create extra Sprites. Do not leave the live view open unless the owner ne
 
 Pi is free. The model is not. Each turn POSTs the system prompt, the whole `imessage` session (prior turns + every tool result), and the new text. Bigger history, bigger Playwright snapshots, and bigger `fetch` bodies all become input tokens **on this turn and every later turn** until the session is gone.
 
-| Model (Claude API) | Input / output per million tokens | When to use it |
+| Model (Claude via OpenRouter) | Input / output per million tokens | When to use it |
 | --- | --- | --- |
 | Haiku 5.5 | $0.10 / $0.50 (≤100k input) | Cheap default. `.env.example` names `anthropic/claude-haiku-5.5`. |
 | Sonnet 5.5 | $2 / $10 | Heavier reasoning. ~20× Haiku input. |
@@ -60,7 +74,7 @@ Pi is free. The model is not. Each turn POSTs the system prompt, the whole `imes
 
 A short Haiku reply on a small session is fractions of a cent. The same work on Sonnet with a long Chrome dump in context is tens of cents, then that dump is paid for again on the next text. Prompt cache hits are cheaper (Haiku 5.5 cache read $0.01 / MTok; Sonnet 5.5 $0.10 / MTok) but a new screenshot or fetch still lands as fresh input.
 
-OpenRouter, if used, charges the upstream list price plus the credit-purchase fee. Do not enable the 1% “use my prompts to improve the product” discount (that is a privacy opt-in, not a real savings). Prefer a direct `ANTHROPIC_API_KEY` over OpenRouter.
+OpenRouter charges the upstream list price plus the credit-purchase fee. Do not enable the 1% “use my prompts to improve the product” discount (that is a privacy opt-in, not a real savings). Do not switch to a direct Anthropic key unless the owner asks.
 
 ## What is cheap on purpose
 
@@ -90,7 +104,7 @@ OpenRouter, if used, charges the upstream list price plus the credit-purchase fe
 
 ```
 Owner iPhone → Sendblue (flat line) → Fly Sprite wakes (CPU/RAM/hot disk)
-                                      → Pi (free) → Anthropic / OpenRouter / OpenAI (tokens)
+                                      → Pi (free) → OpenRouter → upstream model (tokens)
                                       ↘ optional Chrome (more Sprite time + more tokens)
                                       ↘ optional Google MCP (usually $0)
 Sprite sleeps → compute stops; cold disk keeps a small Fly charge
@@ -98,10 +112,10 @@ Sprite sleeps → compute stops; cold disk keeps a small Fly charge
 
 ## Operator checks
 
-- There is **no live spend tool**. Do not claim a dollar amount for “this month” or “this text” unless a vendor dashboard or a future tool actually returned it.
+- Call `spend` for live numbers. Do not claim a dollar amount unless `spend` (or a vendor dashboard the owner opened) actually returned it.
 - Prefer `fetch` and Google MCP over Chrome. Open Chromium when the page needs login, JavaScript, or the owner must see it.
 - Do not change the model to a more expensive one, add MCP servers, or create infrastructure unless the owner asks.
 - Keep `memory/NOTES.md` short. Session JSONL is billed as context every turn — do not paste secrets or huge dumps into it.
 - If a job must run a long time, say that the Sprite stays billed while it runs, write resume state to disk, and prefer finishing over polling.
-- Confirm on the Sprite which provider is actually configured (`PI_PROVIDER` / `pi auth`). This file will not open `.env`.
-- Re-check Sendblue / Fly / Anthropic pricing pages if you rely on a number in this file.
+- Confirm on the Sprite that the model path is OpenRouter (`PI_PROVIDER=openrouter` / `pi auth`). This file will not open `.env`.
+- Re-check Sendblue / Fly / OpenRouter (and Anthropic list prices for `anthropic/…` models) if you rely on a number in this file.

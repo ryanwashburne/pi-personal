@@ -6,11 +6,12 @@ import { expect, test } from "bun:test";
 import type { Config } from "./config";
 import { createPiAgent, PI_RPC_TOOLS } from "./pi";
 
-test("RPC tool allowlist declares MCP, fetch, codemode, and tool_search", () => {
+test("RPC tool allowlist declares MCP, fetch, spend, codemode, and tool_search", () => {
   expect(PI_RPC_TOOLS).toContain("mcp__*");
   expect(PI_RPC_TOOLS).toContain("codemode");
   expect(PI_RPC_TOOLS).toContain("tool_search");
   expect(PI_RPC_TOOLS).toContain("fetch");
+  expect(PI_RPC_TOOLS).toContain("spend");
   expect(PI_RPC_TOOLS).toContain("read");
   expect(PI_RPC_TOOLS).toContain("bash");
 });
@@ -61,16 +62,20 @@ test("Pi workspace documents spend", () => {
   const cost = readFileSync(join(import.meta.dir, "../COST.md"), "utf8");
 
   expect(system).toContain("COST.md");
+  expect(system).toContain("spend");
   expect(system).toMatch(/spend-aware/i);
   expect(system).toMatch(/do not invent an invoice/i);
   expect(agents).toContain("COST.md");
-  expect(agents).toMatch(/no live spend tool/i);
+  expect(agents).toContain("spend");
 
   expect(cost).toMatch(/^# Cost/m);
   expect(cost).toMatch(/Sendblue/i);
   expect(cost).toMatch(/Sprite/i);
-  expect(cost).toMatch(/no spend tool yet/i);
-  expect(cost).toMatch(/do not invent a current balance/i);
+  expect(cost).toContain("`spend`");
+  expect(cost).toMatch(/do not invent/i);
+  expect(cost).toMatch(/This app’s model path/);
+  expect(cost).not.toMatch(/Prefer a direct `ANTHROPIC_API_KEY`/);
+  expect(system).toMatch(/OpenRouter/);
 });
 
 function rpcLog(dir: string): Array<{ type?: string; message?: string; streamingBehavior?: string }> {
