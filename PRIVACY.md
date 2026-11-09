@@ -80,7 +80,7 @@ Disk survives sleep; processes do not. These paths are gitignored.
 | `agent/browser-profile/` | Chromium cookies, local storage, saved passwords | Session hijack for logged-in sites |
 | `agent/live-view.md` | Public live-view URL with `DASHBOARD_SECRET` | Remote control of Sprite Chrome |
 | `agent/state/processed.json` | Sendblue `message_handle` ids (no bodies) | Low |
-| `~/.pi/agent/auth.json` and `mcp.json` | Provider credentials; MCP URLs and bearer tokens | Model-account and MCP-server access |
+| `~/.pi/agent/auth.json`, `~/.pi/agent/mcp.json`, and `agent/.pi/mcp.json` | Provider credentials; MCP URLs, host-specific Playwright paths, and bearer tokens | Model-account and MCP-server access |
 | `agent/memory/NOTES.md` | Durable notes Pi is told to keep | Whatever was written there |
 | Fly `gateway.log` | First 80 chars of each inbound text, phone, handles | Message snippets + identity |
 

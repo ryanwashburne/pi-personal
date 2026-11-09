@@ -16,6 +16,7 @@ agent/state/
 agent/browser-profile/
 agent/logins.md
 agent/live-view.md
+agent/.pi/mcp.json
 agent/memory/NOTES.md
 agent/memory/HEARTBEAT-STATE.md
 browser-bin/

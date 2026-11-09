@@ -6,6 +6,7 @@ This directory is Pi's working tree on the Sprite. Repo-root `AGENTS.md` is for 
 - `HEARTBEAT.md` — stay-ahead loop: high notify bar, drafts/notes, HEARTBEAT_OK if quiet
 - `chrome.md` — shared Sprite Chromium and when to hand it to the owner
 - `live-view.md` — public live-view URL (gitignored; written by the gateway)
+- `.pi/mcp.json` — Playwright and extra MCP servers (gitignored; written by the gateway; do not commit)
 - `memory/NOTES.md` — durable notes across sleeps (gitignored; seeded from `NOTES.md.example`)
 - `memory/HEARTBEAT-STATE.md` — ids the heartbeat already considered (gitignored)
 - `logins.md` — site usernames/passwords (gitignored; do not commit)

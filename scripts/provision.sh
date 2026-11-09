@@ -62,6 +62,7 @@ tar -czf - \
   --exclude agent/state \
   --exclude agent/browser-profile \
   --exclude agent/live-view.md \
+  --exclude agent/.pi/mcp.json \
   --exclude agent/memory/NOTES.md \
   --exclude agent/memory/HEARTBEAT-STATE.md \
   src package.json bun.lock tsconfig.json agent scripts README.md |
