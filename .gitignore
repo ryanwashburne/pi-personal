@@ -13,7 +13,7 @@ credentials.json
 # Pi / gateway state on disk
 agent/sessions/
 agent/state/
-.pi/
+/.pi/
 
 # deps and junk
 node_modules/

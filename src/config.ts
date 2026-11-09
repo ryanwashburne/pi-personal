@@ -1,4 +1,3 @@
-import { homedir } from "node:os";
 import { join } from "node:path";
 
 export type Config = {
@@ -30,6 +29,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     throw new Error("ALLOWED_PHONE must be an E.164 number like +15551234567");
   }
 
+  const agentCwd = env.AGENT_CWD?.trim() || "/home/sprite/agent";
+
   return {
     port: Number(env.PORT ?? 8080),
     webhookPathSecret: requiredFrom(env, "WEBHOOK_PATH_SECRET"),
@@ -41,9 +42,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     sendblueWebhookSecret: requiredFrom(env, "SENDBLUE_WEBHOOK_SECRET"),
     allowedPhone,
     piCli: env.PI_CLI?.trim() || "pi",
-    agentCwd: env.AGENT_CWD?.trim() || "/home/sprite/agent",
-    sessionDir: env.SESSION_DIR?.trim() || "/home/sprite/agent/sessions",
-    mcpConfigPath: env.MCP_CONFIG_PATH?.trim() || join(homedir(), ".pi/agent/mcp.json"),
+    agentCwd,
+    sessionDir: env.SESSION_DIR?.trim() || join(agentCwd, "sessions"),
+    mcpConfigPath: env.MCP_CONFIG_PATH?.trim() || join(agentCwd, ".pi/mcp.json"),
     agentTimeoutMs: Number(env.AGENT_TIMEOUT_MS ?? 600_000),
     piProvider: emptyToUndefined(env.PI_PROVIDER),
     piModel: emptyToUndefined(env.PI_MODEL),

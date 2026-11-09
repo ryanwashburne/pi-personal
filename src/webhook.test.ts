@@ -29,7 +29,8 @@ async function setup() {
   const sent: string[] = [];
   const prompts: string[] = [];
   const gateway = await createGateway({
-    config: { ...config, agentCwd: dir },
+    config: { ...config, agentCwd: dir, mcpConfigPath: join(dir, ".pi/mcp.json") },
+    userMcpPath: join(dir, "missing-user-mcp.json"),
     sendblue: {
       async sendTyping() {},
       async sendMessage(_to, content) {

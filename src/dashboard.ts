@@ -137,7 +137,7 @@ function page(
   const provider = config.piProvider ?? "Pi default";
   const rows = servers.length
     ? servers.map((server) => serverRow(server)).join("")
-    : `<tr><td colspan="4" class="empty">No MCP servers yet. Add a public https URL below.</td></tr>`;
+    : `<tr><td colspan="4" class="empty">None configured. Paste your MCP URL below — Pi does not ship with any servers.</td></tr>`;
 
   return `<!doctype html>
 <html lang="en">
@@ -188,7 +188,7 @@ function page(
     </table>
 
     <h2>Add HTTP MCP</h2>
-    <p class="hint">Paste the server’s streamable HTTP URL (usually ending in <code>/mcp</code>). Optional bearer token is stored in Pi’s <code>mcp.json</code> on this machine, not in git.</p>
+    <p class="hint">Paste the server’s streamable HTTP URL (usually ending in <code>/mcp</code>). Saved to <code>.pi/mcp.json</code> in this workspace so Pi and this page see the same file. Optional bearer token stays on the Sprite, not in git.</p>
     <form class="stack" method="post">
       <input type="hidden" name="action" value="add">
       <label>Name
