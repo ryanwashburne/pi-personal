@@ -352,7 +352,7 @@ function browserSection(config: Config, browser: BrowserStatus): string {
       </form>
       <a href="${escapeHtml(viewer)}">Open live view</a>
     </p>
-    <p class="hint">The live view streams this Chromium into this site. Keep that tab open while you type a login or MFA code so the Sprite stays awake.</p>`;
+    <p class="hint">The live view streams this Chromium into this site. Paste (⌘V / Ctrl+V) works there — never text passwords. Keep that tab open while you log in so the Sprite stays awake.</p>`;
 }
 
 function tailscaleSection(tailscale: TailscaleStatus): string {
@@ -393,6 +393,7 @@ function viewerPage(
     html, body { margin: 0; height: 100%; background: #111; color: #eee; font: 15px/1.4 system-ui, sans-serif; display: flex; flex-direction: column; }
     header { display: flex; gap: 0.75rem; align-items: center; padding: 0.5rem 0.8rem; border-bottom: 1px solid #333; flex: 0 0 auto; }
     header a, header button { color: inherit; font: inherit; }
+    header .hint { color: #aaa; font-size: 0.85rem; }
     #screen { flex: 1; min-height: 0; position: relative; background: #1a3048; }
     #status { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; padding: 1rem; text-align: center; }
     .msg { padding: 1rem; max-width: 48rem; }
@@ -417,35 +418,97 @@ function viewerPage(
       <button type="submit">Stop</button>
     </form>
     <span>${browser.running ? "streaming" : "stopped"}</span>
+    ${browser.running ? `<button type="button" id="paste">Paste</button><span class="hint">⌘V / Ctrl+V into Chrome</span>` : ""}
   </header>
   ${flashNotice ? `<p class="flash ok">${escapeHtml(flashNotice)}</p>` : ""}
   ${flashError ? `<p class="flash bad">${escapeHtml(flashError)}</p>` : ""}
   ${
     browser.running
       ? `<div id="screen"><p id="status">Connecting to Sprite display…</p></div>
-  <script type="module">
+  ${viewerScript(wsPath)}`
+      : `<div class="msg">${empty}</div>`
+  }
+</body>
+</html>`;
+}
+
+function viewerScript(wsPath: string): string {
+  return `<script type="module">
     const status = document.getElementById("status");
+    const pasteBtn = document.getElementById("paste");
     try {
       const RFB = (await import("https://cdn.jsdelivr.net/gh/novnc/noVNC@v1.5.0/core/rfb.js")).default;
       const proto = location.protocol === "https:" ? "wss:" : "ws:";
       const rfb = new RFB(document.getElementById("screen"), proto + "//" + location.host + ${JSON.stringify(wsPath)}, { wsProtocols: ["binary"] });
       rfb.scaleViewport = true;
       rfb.clipViewport = false;
-      rfb.addEventListener("connect", () => { if (status) status.textContent = ""; });
+      rfb.focusOnClick = true;
+      let connected = false;
+      let lastPasteAt = 0;
+      let pasteQueue = Promise.resolve();
+      rfb.addEventListener("connect", () => {
+        connected = true;
+        if (status) status.textContent = "";
+      });
       rfb.addEventListener("disconnect", (event) => {
+        connected = false;
         if (!status) return;
         status.textContent = event.detail?.clean
           ? "Disconnected. Start the browser again if the Sprite slept."
           : "Could not connect to the Sprite display. Try Start again.";
       });
+      function keysymFromChar(ch) {
+        if (ch === String.fromCharCode(10) || ch === String.fromCharCode(13)) return 0xff0d;
+        if (ch === String.fromCharCode(9)) return 0xff09;
+        const code = ch.codePointAt(0);
+        if (code === undefined || code < 0x20) return 0;
+        if (code <= 0xff) return code;
+        return 0x01000000 + code;
+      }
+      async function typeText(text) {
+        if (!text) return;
+        if (!connected) return;
+        const now = Date.now();
+        if (now - lastPasteAt < 80) return;
+        lastPasteAt = now;
+        const run = async () => {
+          rfb.focus();
+          for (const ch of text) {
+            const keysym = keysymFromChar(ch);
+            if (keysym) rfb.sendKey(keysym);
+            await new Promise((resolve) => setTimeout(resolve, 8));
+          }
+        };
+        const job = pasteQueue.then(run, run);
+        pasteQueue = job.catch(() => {});
+        await job;
+      }
+      async function pasteFromClipboard() {
+        try {
+          await typeText(await navigator.clipboard.readText());
+        } catch {
+          const text = prompt("Paste into the Sprite browser, then OK.");
+          if (text) await typeText(text);
+        }
+      }
+      window.addEventListener("keydown", (event) => {
+        if (!(event.metaKey || event.ctrlKey) || event.altKey) return;
+        if (event.key.toLowerCase() !== "v") return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        void pasteFromClipboard();
+      }, true);
+      window.addEventListener("paste", (event) => {
+        const text = event.clipboardData && event.clipboardData.getData("text/plain");
+        if (!text) return;
+        event.preventDefault();
+        void typeText(text);
+      });
+      if (pasteBtn) pasteBtn.addEventListener("click", () => void pasteFromClipboard());
     } catch (err) {
       if (status) status.textContent = "Could not load the VNC viewer: " + err;
     }
-  </script>`
-      : `<div class="msg">${empty}</div>`
-  }
-</body>
-</html>`;
+  </script>`;
 }
 
 function serverRow(server: ListedMcpServer): string {

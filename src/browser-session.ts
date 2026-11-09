@@ -179,6 +179,7 @@ export function createBrowserSession(options: BrowserSessionOptions): BrowserSes
                 "-forever",
                 "-shared",
                 "-repeat",
+                "-xkb",
                 "-noxdamage",
                 "-cursor",
                 "arrow",

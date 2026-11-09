@@ -35,7 +35,7 @@ Fill `.env` (this file is gitignored):
 
 That creates Sprite `pi-personal`, copies this repo onto it, installs `gateway` as the HTTP service, and prints the public webhook URL and settings page. Re-run with `REGISTER_WEBHOOK=1` to append that URL on your Sendblue account, or paste it in the Sendblue dashboard yourself.
 
-The Sprite already hosts HTTP on port 8080. The settings page is the same public `*.sprites.app` URL, at `/settings/$DASHBOARD_SECRET`. Open it in a browser to add an HTTP MCP server (your URL, optional bearer token) and to start the Sprite Chromium. **Open live view** streams that browser so you can log into sites yourself — never text passwords. Cookies stay in `agent/browser-profile/` across sleeps. Do not share that link; it is the only auth on the page. The webhook path stays separate so Sendblue never sees the dashboard secret.
+The Sprite already hosts HTTP on port 8080. The settings page is the same public `*.sprites.app` URL, at `/settings/$DASHBOARD_SECRET`. Open it in a browser to add an HTTP MCP server (your URL, optional bearer token) and to start the Sprite Chromium. **Open live view** streams that browser so you can log into sites yourself — never text passwords. ⌘V / Ctrl+V (or the Paste button) types into that Chrome. Cookies stay in `agent/browser-profile/` across sleeps. Do not share that link; it is the only auth on the page. The webhook path stays separate so Sendblue never sees the dashboard secret.
 
 To make Sprite Chrome look like your house IP, run a Tailscale **exit node** at home. Start on the MacBook; later point the same env at the rpi.
 
