@@ -367,7 +367,7 @@ function tailscaleSection(tailscale: TailscaleStatus): string {
       <tr><th>SOCKS</th><td>${tailscale.socksUrl ? `<code>${escapeHtml(tailscale.socksUrl)}</code>` : "—"}</td></tr>
     </table>
     ${tailscale.error ? `<pre class="status">${escapeHtml(tailscale.error)}</pre>` : ""}
-    <p class="hint">Start the browser to connect. The Mac (or rpi) must be awake and approved as an exit node.</p>`;
+    <p class="hint">Start the browser to connect. If Tailscale says this machine is requesting to be an exit node, approve it under Edit route settings, then Start again. The Mac (or rpi) must stay awake.</p>`;
 }
 
 function viewerPage(

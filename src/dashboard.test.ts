@@ -271,6 +271,7 @@ test("settings page shows Tailscale status and last error", async () => {
   expect(page.body).toContain("Auth key");
   expect(page.body).toContain(">set<");
   expect(page.body).toContain("bad exit node");
+  expect(page.body).toContain("Edit route settings");
   expect(page.body).not.toContain("tskey-auth-test");
 });
 
