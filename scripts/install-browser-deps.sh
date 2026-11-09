@@ -34,11 +34,11 @@ has_real_chrome() {
 }
 
 install_xvfb() {
-  if command -v Xvfb >/dev/null && command -v x11vnc >/dev/null; then
+  if command -v Xvfb >/dev/null && command -v x11vnc >/dev/null && command -v openbox >/dev/null && command -v xsetroot >/dev/null; then
     return 0
   fi
   sudo DEBIAN_FRONTEND=noninteractive apt-get update -qq
-  sudo DEBIAN_FRONTEND=noninteractive apt-get install -y xvfb x11vnc fonts-liberation fonts-noto-color-emoji dbus-x11
+  sudo DEBIAN_FRONTEND=noninteractive apt-get install -y xvfb x11vnc openbox x11-xserver-utils fonts-liberation fonts-noto-color-emoji dbus-x11
 }
 
 install_chrome() {

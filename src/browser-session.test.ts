@@ -60,6 +60,7 @@ test("start launches Xvfb, x11vnc, and chromium with a persistent profile", asyn
   expect(chrome.args.some((arg) => arg.startsWith(`--user-data-dir=${join(dir, "browser-profile")}`))).toBe(true);
   expect(chrome.args).toContain("--no-sandbox");
   expect(chrome.args).toContain("--remote-debugging-address=127.0.0.1");
+  expect(chrome.args.some((arg) => arg.startsWith("file://") && arg.endsWith("home.html"))).toBe(true);
 
   await session.stop();
   expect(session.status().running).toBe(false);
@@ -126,4 +127,34 @@ test("a failed start keeps the chromium error, not Xvfb SIGTERM", async () => {
   });
   await expect(session.start()).rejects.toThrow("timed out waiting for 127.0.0.1:9222");
   expect(session.status().error ?? "").not.toMatch(/^Xvfb exited/);
+});
+
+test("start launches a window manager when openbox is installed", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "pi-browser-"));
+  const launched: string[] = [];
+  const session = createBrowserSession({
+    agentCwd: dir,
+    which: (name) =>
+      name === "Xvfb" || name === "x11vnc" || name === "chromium" || name === "openbox" || name === "xsetroot"
+        ? `/usr/bin/${name}`
+        : null,
+    spawn: (cmd) => {
+      launched.push(cmd);
+      return fakeChild();
+    },
+    waitForPort: async () => {},
+    readyDelayMs: 0,
+    async hold() {
+      return { async heartbeat() {}, async release() {} };
+    },
+  });
+  await session.start();
+  expect(launched).toEqual([
+    "/usr/bin/Xvfb",
+    "/usr/bin/xsetroot",
+    "/usr/bin/openbox",
+    "/usr/bin/x11vnc",
+    "/usr/bin/chromium",
+  ]);
+  await session.stop();
 });

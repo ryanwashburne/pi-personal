@@ -1,6 +1,13 @@
 import { expect, test } from "bun:test";
 import { createServer, type AddressInfo } from "node:net";
-import { attachVncWebSocket, toBuffer } from "./vnc-proxy";
+import { attachVncWebSocket, toBuffer, vncProtocolHeaders } from "./vnc-proxy";
+
+test("vncProtocolHeaders echoes noVNC's binary subprotocol", () => {
+  expect(vncProtocolHeaders(new Request("http://x", { headers: { "Sec-WebSocket-Protocol": "binary" } }))).toEqual({
+    "Sec-WebSocket-Protocol": "binary",
+  });
+  expect(vncProtocolHeaders(new Request("http://x"))).toBeUndefined();
+});
 
 test("toBuffer accepts strings and byte arrays", () => {
   expect(toBuffer("ab").toString()).toBe("ab");
