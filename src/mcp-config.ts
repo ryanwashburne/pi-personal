@@ -1,5 +1,6 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { dirname } from "node:path";
+import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
+import { homedir } from "node:os";
+import { dirname, join } from "node:path";
 
 const NAME_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
 
@@ -41,6 +42,23 @@ export function validateMcpUrl(value: string): string | undefined {
     return "URL must start with https:// or http://.";
   }
   return undefined;
+}
+
+export function defaultUserMcpPath(): string {
+  return join(homedir(), ".pi/agent/mcp.json");
+}
+
+export async function migrateUserMcpToProject(
+  projectPath: string,
+  userPath?: string,
+): Promise<boolean> {
+  const from = userPath ?? defaultUserMcpPath();
+  if (projectPath === from) return false;
+  if ((await listMcpServers(projectPath)).length > 0) return false;
+  if ((await listMcpServers(from)).length === 0) return false;
+  await mkdir(dirname(projectPath), { recursive: true });
+  await copyFile(from, projectPath);
+  return true;
 }
 
 export async function listMcpServers(path: string): Promise<ListedMcpServer[]> {

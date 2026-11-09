@@ -37,6 +37,8 @@ That creates Sprite `pi-personal`, copies this repo onto it, installs `gateway` 
 
 The Sprite already hosts HTTP on port 8080. The settings page is the same public `*.sprites.app` URL, at `/settings/$DASHBOARD_SECRET`. Open it in a browser to add an HTTP MCP server (your URL, optional bearer token). Do not share that link; it is the only auth on the page. The webhook path stays separate so Sendblue never sees the dashboard secret.
 
+Pi with `--approve` reads `.pi/mcp.json` in the agent workspace (`/home/sprite/agent/.pi/mcp.json` on the Sprite). The settings page writes that same file. An empty `mcpServers` object means no MCP tools yet — paste a URL on the page, and the gateway restarts Pi. If an older user-level `~/.pi/agent/mcp.json` already has servers, the gateway copies it into the project file on startup.
+
 First-time Pi login on the Sprite:
 
 ```bash

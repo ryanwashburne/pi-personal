@@ -44,6 +44,7 @@ sprite use "$SPRITE_NAME"
 
 echo "Uploading gateway and agent files..."
 sprite exec -- mkdir -p "$REMOTE_APP" "$REMOTE_AGENT"
+sprite exec -- bash -lc "if [ -f $REMOTE_AGENT/.pi/mcp.json ]; then cp $REMOTE_AGENT/.pi/mcp.json /tmp/pi-personal-mcp.json; fi"
 tar -czf - \
   --exclude .git \
   --exclude node_modules \
@@ -54,6 +55,7 @@ tar -czf - \
   sprite exec -- tar -xzf - -C "$REMOTE_APP"
 
 sprite exec -- bash -lc "rm -rf $REMOTE_AGENT && mkdir -p $REMOTE_AGENT && cp -R $REMOTE_APP/agent/. $REMOTE_AGENT/"
+sprite exec -- bash -lc "mkdir -p $REMOTE_AGENT/.pi; if [ -f /tmp/pi-personal-mcp.json ]; then mv /tmp/pi-personal-mcp.json $REMOTE_AGENT/.pi/mcp.json; elif [ -f /home/sprite/.pi/agent/mcp.json ]; then cp /home/sprite/.pi/agent/mcp.json $REMOTE_AGENT/.pi/mcp.json; fi"
 sprite exec -- bash -lc "cat > $REMOTE_APP/.env" < .env
 sprite exec -- bash -lc "grep -q AGENT_CWD= $REMOTE_APP/.env || echo AGENT_CWD=$REMOTE_AGENT >> $REMOTE_APP/.env"
 

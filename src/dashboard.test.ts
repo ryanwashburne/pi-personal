@@ -31,6 +31,7 @@ async function setup() {
   const restarts: number[] = [];
   const gateway = await createGateway({
     config: { ...config, agentCwd: dir, mcpConfigPath: join(dir, "mcp.json") },
+    userMcpPath: join(dir, "missing-user-mcp.json"),
     sendblue: {
       async sendTyping() {},
       async sendMessage() {},
@@ -64,6 +65,7 @@ test("serves HTML at the unguessable settings path", async () => {
   expect(result.status).toBe(200);
   expect(result.headers?.["content-type"]).toContain("text/html");
   expect(result.body).toContain("Add HTTP MCP");
+  expect(result.body).toContain("None configured");
 });
 
 test("does not serve a dashboard when DASHBOARD_SECRET is unset", async () => {
@@ -77,6 +79,7 @@ test("does not serve a dashboard when DASHBOARD_SECRET is unset", async () => {
     },
     sendblue: { async sendTyping() {}, async sendMessage() {} },
     pi: { async prompt() { return ""; }, async restart() {}, async stop() {} },
+    userMcpPath: join(dir, "missing-user-mcp.json"),
     dedupe: await createDedupe(join(dir, "processed.json")),
     async hold() {
       return { async heartbeat() {}, async release() {} };

@@ -20,11 +20,17 @@ test("loadConfig requires allowlisted phone", () => {
   expect(config.allowedPhone).toBe("+15553334444");
   expect(config.port).toBe(8080);
   expect(config.dashboardPathSecret).toBeUndefined();
+  expect(config.mcpConfigPath).toBe("/home/sprite/agent/.pi/mcp.json");
 });
 
 test("loadConfig reads an optional dashboard secret", () => {
   const config = loadConfig({ ...base, DASHBOARD_SECRET: "dash-secret" });
   expect(config.dashboardPathSecret).toBe("dash-secret");
+});
+
+test("loadConfig reads an optional MCP config path", () => {
+  const config = loadConfig({ ...base, MCP_CONFIG_PATH: "/tmp/custom-mcp.json" });
+  expect(config.mcpConfigPath).toBe("/tmp/custom-mcp.json");
 });
 
 test("loadConfig throws when required values are missing", () => {

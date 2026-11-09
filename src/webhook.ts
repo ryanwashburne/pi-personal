@@ -2,6 +2,7 @@ import { join } from "node:path";
 import { normalizePhone, type Config } from "./config";
 import { handleDashboard } from "./dashboard";
 import { createDedupe, type Dedupe } from "./dedupe";
+import { migrateUserMcpToProject } from "./mcp-config";
 import { promptFromInbound, parseInbound } from "./inbound";
 import type { PiAgent } from "./pi";
 import type { GatewayResult } from "./result";
@@ -22,11 +23,15 @@ type GatewayOptions = {
   pi: PiAgent;
   dedupe?: Dedupe;
   hold?: () => Promise<Hold>;
+  userMcpPath?: string;
 };
 
 export async function createGateway(options: GatewayOptions): Promise<Gateway> {
   const dedupe =
     options.dedupe ?? (await createDedupe(join(options.config.agentCwd, "state", "processed.json")));
+  await migrateUserMcpToProject(options.config.mcpConfigPath, options.userMcpPath).catch((error) => {
+    console.warn("mcp config migrate failed", error);
+  });
   const inFlight = new Set<string>();
   const hold = options.hold ?? holdSprite;
 
