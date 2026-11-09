@@ -1,6 +1,6 @@
 # Personal agent workspace
 
-This directory is Pi's working tree on the Sprite. Repo-root `AGENTS.md` is for coding agents on the public git repo.
+This directory is Pi's working tree on the Sprite. Repo-root `AGENTS.md` is for coding agents on the public git repo. Repo-root `PRIVACY.md` is what this agent sees on the owner’s behalf and which vendors process it (including that Anthropic does not train on API traffic by default).
 
 - `imessage.md` — what Messages actually renders in a reply bubble
 - `chrome.md` — shared Sprite Chromium and when to hand it to the owner

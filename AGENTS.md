@@ -6,12 +6,15 @@ This git repo is public. Secrets stay in gitignored files on the Mac and on the 
 
 `agent/AGENTS.md` is Pi’s workspace map (nested files win for that tree). This file is for coding agents working on the repo.
 
+`PRIVACY.md` is the data-flow map: what Pi sees on the owner’s behalf, which vendors process it, and that Anthropic does not train on commercial API traffic by default. Read it before changing webhooks, sessions, browser, MCP, or logging.
+
 ## Layout
 
 - `src/` — Bun webhook gateway, settings page, live-view Chromium
 - `agent/` — copied to `/home/sprite/agent`; Pi’s cwd on the Sprite (`SYSTEM.md`, notes, logins, `imessage.md`, `chrome.md`)
 - `agent/imessage.md` — what Messages actually renders in Pi’s reply bubble (markdown does not)
 - `agent/chrome.md` — shared Sprite Chromium; live-view URL is generated into gitignored `agent/live-view.md`
+- `PRIVACY.md` — what data this agent processes and where it goes (LLM, Sendblue, Fly, browser)
 - `scripts/provision.sh` — create/update the Sprite and copy `.env` + `agent/logins.md`
 - `scripts/setup-macos-exit-node.sh` / `scripts/setup-rpi-exit-node.sh` — advertise a home Tailscale exit node (agent stays on the Sprite)
 
