@@ -101,6 +101,7 @@ test("serves HTML at the unguessable settings path", async () => {
   expect(result.body).toContain("Add HTTP MCP");
   expect(result.body).toContain("None configured");
   expect(result.body).toContain("Open live view");
+  expect(result.body).toContain("Paste (⌘V / Ctrl+V)");
   expect(result.body).toContain("stopped");
 });
 
@@ -229,6 +230,10 @@ test("starts the Sprite browser from the settings form", async () => {
   expect(viewer.body).toContain("Connecting to Sprite display");
   expect(viewer.body).toContain("noVNC@v1.5.0/core/rfb.js");
   expect(viewer.body).toContain('wsProtocols: ["binary"]');
+  expect(viewer.body).toContain(">Paste<");
+  expect(viewer.body).toContain("clipboard.readText");
+  expect(viewer.body).toContain("sendKey");
+  expect(viewer.body).toContain("metaKey");
   expect(viewer.body).not.toContain("/lib/rfb.js");
   expect(viewer.body).not.toContain("nothing to stream");
 });

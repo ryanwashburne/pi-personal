@@ -56,6 +56,7 @@ test("start launches Xvfb, x11vnc, and chromium with a persistent profile", asyn
   expect(session.status().running).toBe(true);
   expect(launched.map((entry) => entry.cmd)).toEqual(["/usr/bin/Xvfb", "/usr/bin/x11vnc", "/usr/bin/chromium"]);
   expect(launched[0].args).toContain("-ac");
+  expect(launched[1].args).toContain("-xkb");
   const chrome = launched[2];
   expect(chrome.args.some((arg) => arg.startsWith(`--user-data-dir=${join(dir, "browser-profile")}`))).toBe(true);
   expect(chrome.args).toContain("--no-sandbox");
