@@ -3,7 +3,8 @@ import { handleBrowserEnsure } from "./browser-ensure";
 import { createBrowserSession, type BrowserSession } from "./browser-session";
 import type { Config } from "./config";
 import { browserWsPath } from "./dashboard";
-import { createPiAgent } from "./pi";
+import { HEARTBEAT_SESSION_ID } from "./heartbeat";
+import { createPiAgent, type PiAgent } from "./pi";
 import { internalListenPort } from "./playwright-mcp";
 import type { SendblueClient } from "./sendblue";
 import { createTailscale } from "./tailscale";
@@ -37,7 +38,19 @@ export async function startApp(options: { config: Config; sendblue: SendblueClie
   const internalPort = internalListenPort();
   process.env.INTERNAL_PORT = String(internalPort);
 
-  const pi = createPiAgent(config);
+  const imessagePi = createPiAgent(config);
+  const heartbeatPi = createPiAgent(config, { sessionId: HEARTBEAT_SESSION_ID, name: HEARTBEAT_SESSION_ID });
+  const pi: PiAgent = {
+    prompt: (message) => imessagePi.prompt(message),
+    async restart() {
+      await imessagePi.restart();
+      await heartbeatPi.restart();
+    },
+    async stop() {
+      await imessagePi.stop();
+      await heartbeatPi.stop();
+    },
+  };
   const tailscale = createTailscale({
     stateDir: join(process.cwd(), "tailscale-state"),
     authKey: config.tailscaleAuthKey,
@@ -58,6 +71,7 @@ export async function startApp(options: { config: Config; sendblue: SendblueClie
     config,
     sendblue,
     pi,
+    heartbeatPi,
     browser,
     tailscale,
   });

@@ -47,7 +47,7 @@ To make Sprite Chrome look like your house IP, and to wake the Sprite on a timer
 ./scripts/install-home.sh
 ```
 
-That advertises this machine as a Tailscale **exit node** and, if `SPRITE_URL` and `HEARTBEAT_SECRET` are set, pings `/heartbeat/$HEARTBEAT_SECRET` every 30 minutes. The Sprite still sleeps between pings. Re-run the same command to update. `uninstall` stops the daemon.
+That advertises this machine as a Tailscale **exit node** and, if `SPRITE_URL` and `HEARTBEAT_SECRET` are set, pings `/heartbeat/$HEARTBEAT_SECRET` every 2 hours (`HEARTBEAT_INTERVAL_SECONDS`). Each ping is a full Pi turn that can scan mail and calendar; the Sprite still sleeps between pings. Quiet hours (22:00–08:00 America/New_York) still run the turn but do not iMessage. A Mac LaunchAgent only runs while you are logged in — lid closed, pings stop until a Raspberry Pi (or another always-on box) takes over. Re-run the same command to update. `uninstall` stops the daemon. If an older install wrote `1800` into `~/.pi-personal-home/env`, set `HEARTBEAT_INTERVAL_SECONDS=7200` and re-run.
 
 It prints the `TAILSCALE_EXIT_NODE` value (hostname is fine). Put a reusable, non-ephemeral `TAILSCALE_AUTHKEY` in `.env` once — that key is for the Sprite, not the home box. Re-run `./scripts/provision.sh`. The Sprite looks up that name in `tailscale status --json` and sets the exit node by its `100.x` address (MagicDNS is off so a hostname often fails). Only Chromium uses the SOCKS proxy — Sendblue and the live-view URL stay on Fly. The exit node must stay on while Chrome needs the home IP.
 
@@ -142,6 +142,7 @@ The gateway can also run on your laptop (`bun start`) with the same `.env` if yo
 - `agent/browser-profile/` (Chromium logins and cookies)
 - `agent/logins.md` (site usernames and passwords)
 - `agent/live-view.md` (public live-view URL; embeds `DASHBOARD_SECRET`)
+- `agent/memory/NOTES.md` and `agent/memory/HEARTBEAT-STATE.md` (personal Sprite notes)
 - Pi `auth.json` / provider credentials
 - `~/.pi/agent/google-oauth.json` (Google MCP tokens on the Sprite)
 

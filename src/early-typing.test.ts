@@ -53,6 +53,8 @@ test("boot files do not import the heavy gateway graph", () => {
     expect(src).not.toMatch(/from ["']\.\/google-/);
     expect(src).not.toMatch(/from ["']\.\/playwright-mcp["']/);
     expect(src).not.toMatch(/from ["']\.\/browser-session["']/);
+    expect(src).not.toMatch(/from ["']\.\/heartbeat["']/);
+    expect(src).not.toMatch(/from ["']\.\/pi["']/);
   }
   expect(early).not.toMatch(/from ["']\.\/app["']/);
   expect(index).not.toMatch(/from ["']\.\/app["']/);
