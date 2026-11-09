@@ -4,6 +4,7 @@ import { createBrowserSession, type BrowserSession } from "./browser-session";
 import type { Config } from "./config";
 import { browserWsPath } from "./dashboard";
 import { HEARTBEAT_SESSION_ID } from "./heartbeat";
+import { effectiveExitNode } from "./home-registration";
 import { createPiAgent, type PiAgent } from "./pi";
 import { internalListenPort } from "./playwright-mcp";
 import { handleRoutineAdmin, ROUTINES_SESSION_ID } from "./routines";
@@ -59,11 +60,12 @@ export async function startApp(options: { config: Config; sendblue: SendblueClie
     stateDir: join(process.cwd(), "tailscale-state"),
     authKey: config.tailscaleAuthKey,
     exitNode: config.tailscaleExitNode,
+    resolveExitNodeName: () => effectiveExitNode(config.agentCwd, config.tailscaleExitNode),
     socksPort: config.tailscaleSocksPort,
   });
   const browser = createBrowserSession({
     agentCwd: config.agentCwd,
-    requireProxy: Boolean(config.tailscaleExitNode),
+    requireProxy: Boolean(effectiveExitNode(config.agentCwd, config.tailscaleExitNode)),
     async ensureNetwork() {
       await tailscale.start();
       const status = tailscale.status();

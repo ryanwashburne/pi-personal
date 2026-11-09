@@ -96,6 +96,31 @@ test("start requires both auth key and exit node", async () => {
   await expect(session.start()).rejects.toThrow("TAILSCALE_EXIT_NODE");
 });
 
+test("start prefers resolveExitNodeName over TAILSCALE_EXIT_NODE", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "pi-ts-"));
+  const launched: Array<{ cmd: string; args: string[] }> = [];
+  const session = createTailscale({
+    stateDir: dir,
+    authKey: "tskey-auth-test",
+    exitNode: "env-fallback",
+    resolveExitNodeName: () => "ryans-macbook",
+    spawn: (cmd, args) => {
+      launched.push({ cmd, args: [...args] });
+      if (args.includes("status")) return fakeOutput(0, JSON.stringify({ Peer: { n: macPeer } }));
+      if (args.includes("up") || args.includes("set")) return fakeChild(0);
+      return fakeChild();
+    },
+    which: (name) => `/usr/sbin/${name}`,
+    waitForPort: async () => {},
+  });
+  expect(session.status().exitNode).toBe("ryans-macbook");
+  await session.start();
+  expect(session.status().running).toBe(true);
+  expect(session.status().exitNode).toBe("ryans-macbook");
+  expect(launched.some((item) => item.args.includes("--exit-node=100.64.1.1"))).toBe(true);
+  await session.stop();
+});
+
 test("start launches userspace tailscaled and up with the exit node", async () => {
   const dir = await mkdtemp(join(tmpdir(), "pi-ts-"));
   const launched: Array<{ cmd: string; args: string[] }> = [];

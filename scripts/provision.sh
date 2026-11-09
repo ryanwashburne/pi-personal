@@ -56,6 +56,7 @@ sprite exec -- bash -lc "if [ -f $REMOTE_AGENT/memory/NOTES.md ]; then cp -a $RE
 sprite exec -- bash -lc "if [ -f $REMOTE_AGENT/memory/HEARTBEAT-STATE.md ]; then cp -a $REMOTE_AGENT/memory/HEARTBEAT-STATE.md /tmp/pi-personal-heartbeat-state.md; fi"
 sprite exec -- bash -lc "if [ -f $REMOTE_AGENT/memory/routines.json ]; then cp -a $REMOTE_AGENT/memory/routines.json /tmp/pi-personal-routines.json; fi"
 sprite exec -- bash -lc "if [ -d $REMOTE_AGENT/memory/routines ]; then rm -rf /tmp/pi-personal-routines; cp -a $REMOTE_AGENT/memory/routines /tmp/pi-personal-routines; fi"
+sprite exec -- bash -lc "if [ -f $REMOTE_AGENT/memory/home.json ]; then cp -a $REMOTE_AGENT/memory/home.json /tmp/pi-personal-home.json; fi"
 tar -czf - \
   --exclude .git \
   --exclude node_modules \
@@ -69,6 +70,7 @@ tar -czf - \
   --exclude agent/memory/HEARTBEAT-STATE.md \
   --exclude agent/memory/routines.json \
   --exclude agent/memory/routines \
+  --exclude agent/memory/home.json \
   src package.json bun.lock tsconfig.json agent scripts README.md |
   sprite exec -- tar -xzf - -C "$REMOTE_APP"
 
@@ -87,7 +89,8 @@ if [ -f /tmp/pi-personal-heartbeat-state.md ]; then mv /tmp/pi-personal-heartbea
 elif [ ! -f $REMOTE_AGENT/memory/HEARTBEAT-STATE.md ] && [ -f $REMOTE_AGENT/memory/HEARTBEAT-STATE.md.example ]; then cp $REMOTE_AGENT/memory/HEARTBEAT-STATE.md.example $REMOTE_AGENT/memory/HEARTBEAT-STATE.md; fi
 if [ -f /tmp/pi-personal-routines.json ]; then mv /tmp/pi-personal-routines.json $REMOTE_AGENT/memory/routines.json
 elif [ ! -f $REMOTE_AGENT/memory/routines.json ] && [ -f $REMOTE_AGENT/memory/routines.json.example ]; then cp $REMOTE_AGENT/memory/routines.json.example $REMOTE_AGENT/memory/routines.json; fi
-if [ -d /tmp/pi-personal-routines ]; then rm -rf $REMOTE_AGENT/memory/routines; mv /tmp/pi-personal-routines $REMOTE_AGENT/memory/routines; fi"
+if [ -d /tmp/pi-personal-routines ]; then rm -rf $REMOTE_AGENT/memory/routines; mv /tmp/pi-personal-routines $REMOTE_AGENT/memory/routines; fi
+if [ -f /tmp/pi-personal-home.json ]; then mv /tmp/pi-personal-home.json $REMOTE_AGENT/memory/home.json; fi"
 sprite exec -- bash -lc "cat > $REMOTE_APP/.env" < .env
 sprite exec -- bash -lc "grep -q AGENT_CWD= $REMOTE_APP/.env || echo AGENT_CWD=$REMOTE_AGENT >> $REMOTE_APP/.env"
 
@@ -214,3 +217,11 @@ echo "  pi auth login openrouter --api-key"
 echo
 echo "Then text $SENDBLUE_FROM_NUMBER from $ALLOWED_PHONE."
 echo "Watch logs with: sprite exec -- tail -f /.sprite/logs/services/gateway.log"
+
+echo
+echo "Updating home daemons (role unchanged)..."
+if bash "$ROOT/scripts/sync-home.sh"; then
+  echo "Home-daemon sync finished."
+else
+  echo "Warning: home-daemon sync failed. Sprite is updated; re-run ./scripts/sync-home.sh or install-home.sh update on each box." >&2
+fi
