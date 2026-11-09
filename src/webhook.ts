@@ -5,7 +5,9 @@ import { handleDashboard } from "./dashboard";
 import { createDedupe, type Dedupe } from "./dedupe";
 import { webhookPath, webhookSecretOk } from "./early-typing";
 import { syncGoogleWorkspaceMcp } from "./google-mcp";
+import { handleHeartbeat } from "./heartbeat";
 import { promptFromInbound, parseInbound } from "./inbound";
+import { promptWithLiveView, syncLiveViewFile } from "./live-view";
 import {
   BROWSER_MCP_NAME,
   mcpConfigPaths,
@@ -13,7 +15,6 @@ import {
   upsertStdioMcpServers,
 } from "./mcp-config";
 import { defaultPlaywrightMcp } from "./playwright-mcp";
-import { promptWithLiveView, syncLiveViewFile } from "./live-view";
 import type { PiAgent } from "./pi";
 import type { GatewayResult } from "./result";
 import type { SendblueClient } from "./sendblue";
@@ -70,6 +71,7 @@ export async function createGateway(options: GatewayOptions): Promise<Gateway> {
   const inFlight = new Set<string>();
   const hold = options.hold ?? holdSprite;
   const typingPulseMs = options.typingPulseMs ?? TYPING_PULSE_MS;
+  let piBusy = false;
   syncLiveViewFile(options.config);
 
   return {
@@ -85,6 +87,17 @@ export async function createGateway(options: GatewayOptions): Promise<Gateway> {
         tailscale: options.tailscale,
       });
       if (dashboard) return dashboard;
+      const heartbeat = handleHeartbeat(request, {
+        config: options.config,
+        pi: options.pi,
+        sendblue: options.sendblue,
+        hold,
+        isBusy: () => piBusy,
+        setBusy: (busy) => {
+          piBusy = busy;
+        },
+      });
+      if (heartbeat) return heartbeat;
       if (request.method !== "POST" || url.pathname !== webhookPath(options.config)) {
         return { status: 404, body: "not found" };
       }
@@ -117,6 +130,7 @@ export async function createGateway(options: GatewayOptions): Promise<Gateway> {
         return { status: 200, body: "duplicate" };
       }
       inFlight.add(inbound.messageHandle);
+      piBusy = true;
       startTyping(options.sendblue, from);
 
       return {
@@ -163,6 +177,7 @@ export async function createGateway(options: GatewayOptions): Promise<Gateway> {
           } finally {
             if (pulse) clearInterval(pulse);
             inFlight.delete(inbound.messageHandle);
+            piBusy = false;
             const task = await taskP;
             await task.release().catch((error) => console.warn("task release failed", error));
           }

@@ -26,7 +26,7 @@ type RunningTurn = {
 };
 
 export const PI_RPC_TOOLS =
-  "read,bash,edit,write,grep,find,ls,codemode,tool_search,fetch,mcp__*";
+  "read,bash,edit,write,grep,find,ls,codemode,tool_search,fetch,spend,mcp__*";
 
 const RPC_ACK_TIMEOUT_MS = 30_000;
 

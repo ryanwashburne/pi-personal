@@ -23,6 +23,10 @@ set +a
 : "${SENDBLUE_API_KEY_SECRET:?}"
 : "${SENDBLUE_WEBHOOK_SECRET:?}"
 
+# Sprite CLI uses SPRITE_URL as its API endpoint. .env uses the same name
+# for the public VM origin, so drop it before calling `sprite`.
+unset SPRITE_URL
+
 if ! command -v sprite >/dev/null 2>&1; then
   echo "sprite CLI not found. Run ./scripts/install-clis.sh then sprite login." >&2
   exit 1
@@ -136,6 +140,12 @@ if [[ -n "${DASHBOARD_SECRET:-}" ]]; then
 else
   echo "Settings dashboard: off (set DASHBOARD_SECRET in .env to enable)"
 fi
+if [[ -n "${HEARTBEAT_SECRET:-}" ]]; then
+  echo "Home heartbeat (Mac or Raspberry Pi: ./scripts/install-home.sh):"
+  echo "  ${ORIGIN}/heartbeat/${HEARTBEAT_SECRET}"
+else
+  echo "Home heartbeat: off (set HEARTBEAT_SECRET in .env to enable)"
+fi
 echo
 
 echo "Enabling Sendblue auto typing (covers Sprite warm/cold wake before our process exists)..."
@@ -182,7 +192,7 @@ fi
 echo
 echo "If Pi is not authenticated yet:"
 echo "  sprite console -s $SPRITE_NAME"
-echo "  pi auth login anthropic --api-key"
+echo "  pi auth login openrouter --api-key"
 echo
 echo "Then text $SENDBLUE_FROM_NUMBER from $ALLOWED_PHONE."
 echo "Watch logs with: sprite exec -- tail -f /.sprite/logs/services/gateway.log"

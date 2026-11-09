@@ -6,11 +6,12 @@ import { expect, test } from "bun:test";
 import type { Config } from "./config";
 import { createPiAgent, PI_RPC_TOOLS } from "./pi";
 
-test("RPC tool allowlist declares MCP, fetch, codemode, and tool_search", () => {
+test("RPC tool allowlist declares MCP, fetch, spend, codemode, and tool_search", () => {
   expect(PI_RPC_TOOLS).toContain("mcp__*");
   expect(PI_RPC_TOOLS).toContain("codemode");
   expect(PI_RPC_TOOLS).toContain("tool_search");
   expect(PI_RPC_TOOLS).toContain("fetch");
+  expect(PI_RPC_TOOLS).toContain("spend");
   expect(PI_RPC_TOOLS).toContain("read");
   expect(PI_RPC_TOOLS).toContain("bash");
 });
@@ -20,6 +21,7 @@ test("Pi workspace documents iMessage-safe replies", () => {
   const system = readFileSync(join(agentDir, "SYSTEM.md"), "utf8");
   const agents = readFileSync(join(agentDir, "AGENTS.md"), "utf8");
   const imessage = readFileSync(join(agentDir, "imessage.md"), "utf8");
+  const heartbeat = readFileSync(join(agentDir, "HEARTBEAT.md"), "utf8");
 
   expect(system).toMatch(/iMessage only/i);
   expect(system).toMatch(/stop or cancel/i);
@@ -32,6 +34,7 @@ test("Pi workspace documents iMessage-safe replies", () => {
   expect(imessage).toMatch(/bare URLs/i);
   expect(imessage).toMatch(/data detectors/i);
   expect(imessage).toMatch(/Does not render/i);
+  expect(heartbeat).toContain("HEARTBEAT_OK");
 });
 
 test("Pi workspace documents shared Chrome and the live view URL", () => {
@@ -52,6 +55,54 @@ test("Pi workspace documents shared Chrome and the live view URL", () => {
   expect(chrome).toMatch(/live view URL/i);
   expect(chrome).toContain("live-view.md");
   expect(chrome).toContain("fetch");
+});
+
+test("Pi workspace requires login confirmation, stay-logged-in, and computed numbers", () => {
+  const agentDir = join(import.meta.dir, "../agent");
+  const system = readFileSync(join(agentDir, "SYSTEM.md"), "utf8");
+  const agents = readFileSync(join(agentDir, "AGENTS.md"), "utf8");
+  const chrome = readFileSync(join(agentDir, "chrome.md"), "utf8");
+
+  expect(system).toMatch(/before filling a stored login/i);
+  expect(system).toMatch(/wait for a yes/i);
+  expect(system).toMatch(/do not fill until they confirm/i);
+  expect(system).toMatch(/compute it with a tool or the shell/i);
+  expect(system).toMatch(/compute it a second time/i);
+  expect(system).toMatch(/do not guess/i);
+  expect(system).toMatch(/quote a number as-is only when copying it from a source/i);
+
+  expect(chrome).toMatch(/wait for the owner to confirm/i);
+  expect(chrome).toMatch(/Remember me/i);
+  expect(chrome).toMatch(/Stay logged in/i);
+
+  expect(agents).toMatch(/after the owner confirms/i);
+  expect(agents).toMatch(/Remember me \/ Stay logged in/i);
+});
+
+test("Pi workspace documents spend", () => {
+  const agentDir = join(import.meta.dir, "../agent");
+  const system = readFileSync(join(agentDir, "SYSTEM.md"), "utf8");
+  const agents = readFileSync(join(agentDir, "AGENTS.md"), "utf8");
+  const cost = readFileSync(join(import.meta.dir, "../COST.md"), "utf8");
+
+  expect(system).toContain("COST.md");
+  expect(system).toContain("spend");
+  expect(system).toMatch(/spend-aware/i);
+  expect(system).toMatch(/do not invent an invoice/i);
+  expect(system).toContain("HEARTBEAT.md");
+  expect(system).toContain("HEARTBEAT_OK");
+  expect(agents).toContain("COST.md");
+  expect(agents).toContain("HEARTBEAT.md");
+  expect(agents).toContain("spend");
+
+  expect(cost).toMatch(/^# Cost/m);
+  expect(cost).toMatch(/Sendblue/i);
+  expect(cost).toMatch(/Sprite/i);
+  expect(cost).toContain("`spend`");
+  expect(cost).toMatch(/do not invent/i);
+  expect(cost).toMatch(/This app’s model path/);
+  expect(cost).not.toMatch(/Prefer a direct `ANTHROPIC_API_KEY`/);
+  expect(system).toMatch(/OpenRouter/);
 });
 
 function rpcLog(dir: string): Array<{ type?: string; message?: string; streamingBehavior?: string }> {

@@ -4,7 +4,7 @@ Pi and the owner share one Sprite Chromium. Playwright MCP (`mcp__playwright__*`
 
 Use `fetch` for public pages and APIs. Open Chrome when the site needs a login, cookies, JavaScript, or the owner has to look at it.
 
-Drive Chrome yourself when you can (open a tab, fill `logins.md` locally). When the owner must look at it or type (MFA, CAPTCHA, paste, confirm a login), text the Live view URL on its own line.
+Drive Chrome yourself when you can (open a tab). If a site needs credentials from `logins.md`, name the site in a text and wait for the owner to confirm before filling anything. After they say yes, fill locally with Playwright MCP. Always tick Remember me, Stay logged in, Keep me signed in, or the equivalent checkbox if the form has one. When the owner must look at it or type (MFA, CAPTCHA, paste), text the Live view URL on its own line.
 
 That URL is on each inbound prompt and in `live-view.md` (written by the gateway). Do not invent a URL. Do not read `.env`. If `live-view.md` says the dashboard is off or the origin is unknown, say you cannot send the link.
 

@@ -27,7 +27,8 @@ Fill `.env` (this file is gitignored):
 - `ALLOWED_PHONE` — your number, E.164
 - `WEBHOOK_PATH_SECRET` and `SENDBLUE_WEBHOOK_SECRET` — long random strings
 - `DASHBOARD_SECRET` — long random string for the settings page (optional; omit to disable it)
-- a model key (`OPENROUTER_API_KEY`, `ANTHROPIC_API_KEY`, …)
+- `HEARTBEAT_SECRET` — long random string for the home-daemon ping (optional; omit to disable it)
+- a model key (`OPENROUTER_API_KEY`; this app does not use a direct Anthropic key)
 - optional site logins in `agent/logins.md` (gitignored; copy from `agent/logins.md.example`)
 
 ```bash
@@ -40,16 +41,17 @@ The Sprite already hosts HTTP on port 8080. The settings page is the same public
 
 `provision.sh` writes `SPRITE_URL` into `.env`. The gateway copies the live-view URL into gitignored `agent/live-view.md` and prefixes it on each Pi prompt, so when Chrome needs you, Pi can iMessage that link as a bare URL.
 
-To make Sprite Chrome look like your house IP, run a Tailscale **exit node** at home. The MacBook works for a first test; the Raspberry Pi is the always-on box.
+To make Sprite Chrome look like your house IP, and to wake the Sprite on a timer for a quiet heartbeat, run one installer on whichever box stays at home (MacBook for a first test, Raspberry Pi when you want it always on):
 
 ```bash
-./scripts/setup-macos-exit-node.sh   # Mac, for a first test
-./scripts/setup-rpi-exit-node.sh     # on the Pi, when you want it always on
+./scripts/install-home.sh
 ```
 
-Each script advertises that machine as an exit node and prints the `TAILSCALE_EXIT_NODE` value (hostname is fine). Put a reusable, non-ephemeral `TAILSCALE_AUTHKEY` in `.env` once — that key is for the Sprite, not the Pi. Re-run `./scripts/provision.sh`. The Sprite looks up that name in `tailscale status --json` and sets the exit node by its `100.x` address (MagicDNS is off so a hostname often fails). Only Chromium uses the SOCKS proxy — Sendblue and the live-view URL stay on Fly. The exit node must stay on while Chrome needs the home IP.
+That advertises this machine as a Tailscale **exit node** and, if `SPRITE_URL` and `HEARTBEAT_SECRET` are set, pings `/heartbeat/$HEARTBEAT_SECRET` every 30 minutes. The Sprite still sleeps between pings. Re-run the same command to update. `uninstall` stops the daemon.
 
-The iMessage agent does **not** run on the Raspberry Pi. Do not install the gateway, Sendblue, or Chrome there. Hardware, forgotten-login recovery, and the on-device script are in [Raspberry Pi (home exit node)](#raspberry-pi-home-exit-node).
+It prints the `TAILSCALE_EXIT_NODE` value (hostname is fine). Put a reusable, non-ephemeral `TAILSCALE_AUTHKEY` in `.env` once — that key is for the Sprite, not the home box. Re-run `./scripts/provision.sh`. The Sprite looks up that name in `tailscale status --json` and sets the exit node by its `100.x` address (MagicDNS is off so a hostname often fails). Only Chromium uses the SOCKS proxy — Sendblue and the live-view URL stay on Fly. The exit node must stay on while Chrome needs the home IP.
+
+The iMessage agent does **not** run on the home box. Do not install the gateway, Sendblue, or Chrome there. Hardware, forgotten-login recovery, and moving the daemon to a Pi are in [Raspberry Pi (home exit node)](#raspberry-pi-home-exit-node).
 
 Pi always reads `~/.pi/agent/mcp.json`. With `--approve` it also reads `.pi/mcp.json` in the agent workspace. The gateway writes a built-in Playwright stdio server into **both** so Pi can start Chromium and control it over CDP (`127.0.0.1:9222`). After you connect Google on the settings page, it also writes Gmail, Calendar, Drive, and search stdio servers (`mcp__gmail__*`, `mcp__calendar__*`, `mcp__drive__*`, `mcp__search__*`) that call Google’s REST APIs from the Sprite. Tokens stay in `~/.pi/agent/google-oauth.json` on the Sprite. The settings page adds extra HTTP servers the same way, with `exposure: "direct"` so tools are declared to the model as `mcp__<name>__<tool>`. The settings page also runs `pi mcp list` so you can see connect errors instead of an empty tool list. An agent-started browser does not take the Sprite `browser` task hold — after the reply the Sprite can sleep and Chrome dies; cookies stay on disk. Start from settings if you want the box held awake for a live-view login.
 
@@ -65,13 +67,13 @@ Local stdio MCP on the Sprite talks to Gmail, Calendar, and Drive REST. Search f
 
 Gmail MCP can draft and cannot send. Tokens persist in `~/.pi/agent/google-oauth.json` across provision (that path is not under `agent/`).
 
-`provision.sh` also runs `pi install npm:cc-safety-net`. That extension blocks `.env`, SSH keys, and the extra paths in `agent/.cc-safety-net/policy.json` (`browser-profile`, sessions, MCP config, the gateway `.env`, Google OAuth tokens). It does **not** block `logins.md` or `live-view.md` — Pi has to read those. Built-in `fetch` (no API key) loads public http(s) pages without Chrome; Playwright stays for logins and JS. The RPC allowlist in the gateway includes `fetch`.
+`provision.sh` also runs `pi install npm:cc-safety-net`. That extension blocks `.env`, SSH keys, and the extra paths in `agent/.cc-safety-net/policy.json` (`browser-profile`, sessions, MCP config, the gateway `.env`, Google OAuth tokens). It does **not** block `logins.md` or `live-view.md` — Pi has to read those. Built-in `fetch` (no API key) loads public http(s) pages without Chrome; Playwright stays for logins and JS. Built-in `spend` reports live usage this agent can measure (this session’s tokens, Sendblue line caps, OpenRouter key usage). Fly has no billing API. The RPC allowlist includes `fetch` and `spend`.
 
 First-time Pi login on the Sprite:
 
 ```bash
 sprite console -s pi-personal
-pi auth login anthropic --api-key
+pi auth login openrouter --api-key
 ```
 
 Text the Sendblue number from `ALLOWED_PHONE`. You should get a typing indicator on a warm or cold wake, then a reply. After a few idle minutes the Sprite sleeps; the next text wakes it. Re-run `./scripts/provision.sh` after pulling so Sendblue auto-typing is enabled on the account (it takes effect on the next inbound).
@@ -102,13 +104,17 @@ You only need a Linux box that stays powered on house internet and advertises a 
 
 Locked out or dead card: [Raspberry Pi Imager](https://www.raspberrypi.com/software/) → Raspberry Pi OS Lite, enable SSH, set a user, prefill Wi-Fi if you have no ethernet, flash, boot, then:
 
+If you already ran `./scripts/install-home.sh` on the Mac:
+
 ```bash
-scp scripts/setup-rpi-exit-node.sh USER@raspberrypi.local:
+scp ~/.pi-personal-home/env ~/.pi-personal-home/install-home.sh USER@raspberrypi.local:
 ssh USER@raspberrypi.local
-sudo bash setup-rpi-exit-node.sh
+sudo bash install-home.sh
 ```
 
-The script installs Tailscale if needed, turns on IP forwarding, advertises an exit node, and enables Tailscale SSH. Then in the admin console: **Use as exit node** and **Disable key expiry**. Set `TAILSCALE_EXIT_NODE` to the hostname it prints, keep `TAILSCALE_AUTHKEY`, provision again. Optional stable name: `TS_HOSTNAME=rpi-home sudo bash setup-rpi-exit-node.sh`.
+Or copy `scripts/install-home.sh` from this repo and export `SPRITE_URL` / `HEARTBEAT_SECRET` (or put them in `env` next to the script). On Linux it must be `sudo` so the service starts at boot.
+
+The installer installs Tailscale if needed, turns on IP forwarding, advertises an exit node, enables Tailscale SSH, and starts the heartbeat ping. Then in the admin console: **Use as exit node** and **Disable key expiry**. Set `TAILSCALE_EXIT_NODE` to the hostname it prints, keep `TAILSCALE_AUTHKEY`, provision again. Optional stable name: `TS_HOSTNAME=rpi-home sudo bash install-home.sh`.
 
 ## Local checks
 
@@ -123,8 +129,8 @@ The gateway can also run on your laptop (`bun start`) with the same `.env` if yo
 - `src/` — webhook gateway (Bun), including the settings live-view browser
 - `agent/` — Pi working tree (`SYSTEM.md`, notes, `chrome.md`). Copied to `/home/sprite/agent` on the Sprite
 - `scripts/provision.sh` — create/update the Sprite; installs Google Chrome, Xvfb, x11vnc, Tailscale if missing, and CC Safety Net into Pi
-- `scripts/setup-macos-exit-node.sh` — run on the MacBook to advertise a Tailscale exit node
-- `scripts/setup-rpi-exit-node.sh` — run on the Raspberry Pi to advertise the always-on exit node
+- `scripts/install-home.sh` — Mac or Raspberry Pi: Tailscale exit node + Sprite heartbeat ping
+- `scripts/setup-macos-exit-node.sh` / `scripts/setup-rpi-exit-node.sh` — aliases for `install-home.sh`
 - `AGENTS.md` — instructions for coding agents
 - `.env.example` — names of required secrets, no real values
 
@@ -139,4 +145,4 @@ The gateway can also run on your laptop (`bun start`) with the same `.env` if yo
 - Pi `auth.json` / provider credentials
 - `~/.pi/agent/google-oauth.json` (Google MCP tokens on the Sprite)
 
-Access control for the live agent is the unguessable webhook path, the Sendblue signing secret, the phone allowlist in `.env`, and the unguessable settings path (that same path is the only lock on the streamed browser). Sendblue keys stay in the gateway. Pi does not get a “text anyone” tool.
+Access control for the live agent is the unguessable webhook path, the Sendblue signing secret, the phone allowlist in `.env`, the unguessable settings path (that same path is the only lock on the streamed browser), and the unguessable heartbeat path the home daemon curls. Sendblue keys stay in the gateway. Pi does not get a “text anyone” tool.
