@@ -116,7 +116,7 @@ export async function handleDashboard(
       try {
         await options.browser.start();
       } catch (error) {
-        return redirect(returnTo, undefined, error instanceof Error ? error.message : String(error));
+        return redirect(returnTo, undefined, shortFlash(error instanceof Error ? error.message : String(error)));
       }
       return redirect(returnTo, "Browser is running.");
     }
@@ -143,6 +143,11 @@ function parseAction(value: string): DashboardAction | undefined {
     return value;
   }
   return undefined;
+}
+
+function shortFlash(message: string): string {
+  const first = message.split("\n")[0] ?? message;
+  return first.length > 180 ? `${first.slice(0, 177)}...` : first;
 }
 
 function redirect(path: string, notice?: string, error?: string): GatewayResult {

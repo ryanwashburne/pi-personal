@@ -54,8 +54,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     agentTimeoutMs: Number(env.AGENT_TIMEOUT_MS ?? 600_000),
     piProvider: emptyToUndefined(env.PI_PROVIDER),
     piModel: emptyToUndefined(env.PI_MODEL),
-    tailscaleAuthKey: emptyToUndefined(env.TAILSCALE_AUTHKEY),
-    tailscaleExitNode: emptyToUndefined(env.TAILSCALE_EXIT_NODE),
+    tailscaleAuthKey: emptyToUndefined(unquote(env.TAILSCALE_AUTHKEY)),
+    tailscaleExitNode: emptyToUndefined(unquote(env.TAILSCALE_EXIT_NODE)?.replace(/\.+$/, "")),
     tailscaleSocksPort: Number(env.TAILSCALE_SOCKS_PORT ?? 1055),
   };
 }
@@ -71,6 +71,18 @@ function requiredFrom(env: NodeJS.ProcessEnv, name: string): string {
 function emptyToUndefined(value: string | undefined): string | undefined {
   const trimmed = value?.trim();
   return trimmed ? trimmed : undefined;
+}
+
+function unquote(value: string | undefined): string | undefined {
+  const trimmed = value?.trim();
+  if (!trimmed) return trimmed;
+  if (
+    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+    (trimmed.startsWith("'") && trimmed.endsWith("'"))
+  ) {
+    return trimmed.slice(1, -1).trim();
+  }
+  return trimmed;
 }
 
 export function normalizePhone(value: string): string | undefined {

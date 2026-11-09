@@ -55,7 +55,7 @@ test("start launches userspace tailscaled and up with the exit node", async () =
     exitNode: "ryans-macbook",
     spawn: (cmd, args) => {
       launched.push({ cmd, args: [...args] });
-      if (args.includes("up")) return fakeChild(0);
+      if (args.includes("up") || args.includes("set")) return fakeChild(0);
       return fakeChild();
     },
     which: (name) => `/usr/sbin/${name}`,
@@ -67,9 +67,11 @@ test("start launches userspace tailscaled and up with the exit node", async () =
   expect(launched[0].cmd).toBe("/usr/sbin/tailscaled");
   expect(launched[0].args).toContain("--tun=userspace-networking");
   expect(launched[0].args).toContain("--socks5-server=127.0.0.1:1055");
-  expect(launched[1].args).toContain("--exit-node=ryans-macbook");
+  expect(launched[1].args).toContain("up");
   expect(launched[1].args).toContain("--accept-dns=false");
-  expect(launched[1].args.some((arg) => arg === "--reset")).toBe(false);
+  expect(launched[1].args.some((arg) => arg.startsWith("--exit-node="))).toBe(false);
+  expect(launched[2].args).toContain("set");
+  expect(launched[2].args).toContain("--exit-node=ryans-macbook");
   await session.stop();
   expect(session.status().running).toBe(false);
 });

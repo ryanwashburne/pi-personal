@@ -100,27 +100,24 @@ export function createTailscale(options: TailscaleOptions): TailscaleService {
 
     try {
       await waitForPort(socksPort, 15_000);
-      const up = collectLogs(
-        spawnChild(
-          tailscale,
-          [
-            `--socket=${socket}`,
-            "up",
-            `--authkey=${options.authKey}`,
-            `--exit-node=${options.exitNode}`,
-            "--accept-dns=false",
-            `--hostname=${hostname}`,
-          ],
-          { stdio: ["ignore", "pipe", "pipe"] },
-        ),
+      await runTailscale(
+        tailscale,
+        [
+          `--socket=${socket}`,
+          "up",
+          `--authkey=${options.authKey}`,
+          "--accept-dns=false",
+          `--hostname=${hostname}`,
+        ],
         logs,
+        "up",
       );
-      const code = await waitForExit(up, 60_000);
-      if (code !== 0) {
-        throw new Error(
-          `tailscale up failed (code=${code}). Mac awake? Exit node approved? Name matches TAILSCALE_EXIT_NODE?\n${redact(logs.join("").trim()) || "(no tailscale output)"}`,
-        );
-      }
+      await runTailscale(
+        tailscale,
+        [`--socket=${socket}`, "set", `--exit-node=${options.exitNode}`],
+        logs,
+        "set --exit-node",
+      );
       running = true;
     } catch (caught) {
       error = caught instanceof Error ? caught.message : String(caught);
@@ -141,6 +138,16 @@ export function createTailscale(options: TailscaleOptions): TailscaleService {
     }
     daemon = undefined;
     stopping = false;
+  }
+
+  async function runTailscale(bin: string, args: string[], logs: string[], label: string) {
+    const child = collectLogs(spawnChild(bin, args, { stdio: ["ignore", "pipe", "pipe"] }), logs);
+    const code = await waitForExit(child, 60_000);
+    if (code !== 0) {
+      throw new Error(
+        `tailscale ${label} failed (code=${code}). Mac awake, Tailscale connected, exit node approved, TAILSCALE_EXIT_NODE exact name from \`tailscale status\`.\n${redact(logs.join("").trim()) || "(no tailscale output)"}`,
+      );
+    }
   }
 
   return { status, start, stop };

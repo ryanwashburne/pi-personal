@@ -42,7 +42,7 @@ fi
 
 sprite use "$SPRITE_NAME"
 
-echo "Uploading gateway and agent files..."
+echo "Uploading gateway and agent files ($(git rev-parse --short HEAD 2>/dev/null || echo unknown))..."
 sprite exec -- mkdir -p "$REMOTE_APP" "$REMOTE_AGENT"
 sprite exec -- bash -lc "if [ -f $REMOTE_AGENT/.pi/mcp.json ]; then cp $REMOTE_AGENT/.pi/mcp.json /tmp/pi-personal-mcp.json; fi"
 sprite exec -- bash -lc "if [ -f /home/sprite/.pi/agent/mcp.json ]; then cp /home/sprite/.pi/agent/mcp.json /tmp/pi-personal-user-mcp.json; fi"
