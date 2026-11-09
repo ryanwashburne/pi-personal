@@ -1,5 +1,6 @@
 import { join } from "node:path";
 import type { BrowserSession } from "./browser-session";
+import type { TailscaleService } from "./tailscale";
 import { normalizePhone, type Config } from "./config";
 import { handleDashboard } from "./dashboard";
 import { createDedupe, type Dedupe } from "./dedupe";
@@ -23,6 +24,7 @@ type GatewayOptions = {
   sendblue: SendblueClient;
   pi: PiAgent;
   browser?: BrowserSession;
+  tailscale?: TailscaleService;
   dedupe?: Dedupe;
   hold?: () => Promise<Hold>;
   userMcpPath?: string;
@@ -50,6 +52,7 @@ export async function createGateway(options: GatewayOptions): Promise<Gateway> {
         config: options.config,
         pi: options.pi,
         browser: options.browser,
+        tailscale: options.tailscale,
       });
       if (dashboard) return dashboard;
       if (request.method !== "POST" || url.pathname !== webhookPath(options.config)) {

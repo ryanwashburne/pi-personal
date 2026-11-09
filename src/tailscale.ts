@@ -8,6 +8,7 @@ export const TAILSCALE_SOCKS_PORT = 1055;
 export type TailscaleStatus = {
   configured: boolean;
   running: boolean;
+  hasAuthKey: boolean;
   exitNode?: string;
   socksUrl?: string;
   error?: string;
@@ -54,6 +55,7 @@ export function createTailscale(options: TailscaleOptions): TailscaleService {
     return {
       configured: configured(),
       running,
+      hasAuthKey: Boolean(options.authKey),
       exitNode: options.exitNode,
       socksUrl: running ? `socks5://127.0.0.1:${socksPort}` : undefined,
       error,
@@ -131,12 +133,13 @@ export function createTailscale(options: TailscaleOptions): TailscaleService {
   async function stop() {
     stopping = true;
     running = false;
-    if (daemon && daemon.exitCode === null) {
-      daemon.kill("SIGTERM");
-      await delay(400);
-      if (daemon.exitCode === null) daemon.kill("SIGKILL");
-    }
+    const child = daemon;
     daemon = undefined;
+    if (child && child.exitCode === null) {
+      child.kill("SIGTERM");
+      await delay(400);
+      if (child.exitCode === null) child.kill("SIGKILL");
+    }
     stopping = false;
   }
 

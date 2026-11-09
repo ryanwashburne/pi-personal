@@ -13,11 +13,13 @@ import {
 } from "./mcp-config";
 import type { PiAgent } from "./pi";
 import type { GatewayResult } from "./result";
+import type { TailscaleService, TailscaleStatus } from "./tailscale";
 
 type DashboardOptions = {
   config: Config;
   pi: PiAgent;
   browser?: BrowserSession;
+  tailscale?: TailscaleService;
 };
 
 export function dashboardPath(config: Pick<Config, "dashboardPathSecret">): string | undefined {
@@ -176,10 +178,11 @@ async function render(
 
   const mcpStatus = await probePiMcp(options.config);
   const browser = browserStatus(options);
+  const tailscale = tailscaleStatus(options);
 
   return {
     status: 200,
-    body: page(options.config, servers, notice, loadError, mcpStatus, browser),
+    body: page(options.config, servers, notice, loadError, mcpStatus, browser, tailscale),
     headers: {
       "content-type": "text/html; charset=utf-8",
       "cache-control": "no-store",
@@ -213,6 +216,16 @@ function browserStatus(options: DashboardOptions): BrowserStatus {
   };
 }
 
+function tailscaleStatus(options: DashboardOptions): TailscaleStatus {
+  if (options.tailscale) return options.tailscale.status();
+  return {
+    configured: Boolean(options.config.tailscaleAuthKey && options.config.tailscaleExitNode),
+    running: false,
+    hasAuthKey: Boolean(options.config.tailscaleAuthKey),
+    exitNode: options.config.tailscaleExitNode,
+  };
+}
+
 function page(
   config: Config,
   servers: ListedMcpServer[],
@@ -220,6 +233,7 @@ function page(
   error: string | null,
   mcpStatus: string | undefined,
   browser: BrowserStatus,
+  tailscale: TailscaleStatus,
 ): string {
   const model = config.piModel ?? "Pi default";
   const provider = config.piProvider ?? "Pi default";
@@ -274,6 +288,8 @@ function page(
 
     ${browserSection(config, browser)}
 
+    ${tailscaleSection(tailscale)}
+
     <h2>MCP servers</h2>
     ${mcpStatus ? `<pre class="status">${escapeHtml(mcpStatus)}</pre>` : `<p class="hint">Could not run <code>pi mcp list</code> yet. After provision, this block shows whether Pi connected and which <code>mcp__*</code> tools it loaded.</p>`}
     <table>
@@ -320,9 +336,7 @@ function browserSection(config: Config, browser: BrowserStatus): string {
       <tr><th>Exit node</th><td>${
         browser.exitNode
           ? `<code>${escapeHtml(browser.exitNode)}</code>${browser.proxy ? ` via <code>${escapeHtml(browser.proxy)}</code>` : ""}`
-          : config.tailscaleExitNode
-            ? `<code>${escapeHtml(config.tailscaleExitNode)}</code> (start the browser to connect)`
-            : "Sprite / Fly IP (set TAILSCALE_EXIT_NODE to use the MacBook or rpi)"
+          : "see Tailscale below"
       }</td></tr>
     </table>
     ${missing}
@@ -339,6 +353,21 @@ function browserSection(config: Config, browser: BrowserStatus): string {
       <a href="${escapeHtml(viewer)}">Open live view</a>
     </p>
     <p class="hint">The live view streams this Chromium into this site. Keep that tab open while you type a login or MFA code so the Sprite stays awake.</p>`;
+}
+
+function tailscaleSection(tailscale: TailscaleStatus): string {
+  const node = tailscale.exitNode ? `<code>${escapeHtml(tailscale.exitNode)}</code>` : "missing — set TAILSCALE_EXIT_NODE";
+  return `
+    <h2>Tailscale</h2>
+    <p class="lede">Sprite Chrome egresses through this exit node (MacBook now, rpi later). Sendblue stays on Fly. Auth key is never shown.</p>
+    <table>
+      <tr><th>Auth key</th><td>${tailscale.hasAuthKey ? "set" : "missing — set TAILSCALE_AUTHKEY"}</td></tr>
+      <tr><th>Exit node</th><td>${node}</td></tr>
+      <tr><th>Connected</th><td>${tailscale.running ? "yes" : "no"}</td></tr>
+      <tr><th>SOCKS</th><td>${tailscale.socksUrl ? `<code>${escapeHtml(tailscale.socksUrl)}</code>` : "—"}</td></tr>
+    </table>
+    ${tailscale.error ? `<pre class="status">${escapeHtml(tailscale.error)}</pre>` : ""}
+    <p class="hint">Start the browser to connect. The Mac (or rpi) must be awake and approved as an exit node.</p>`;
 }
 
 function viewerPage(
