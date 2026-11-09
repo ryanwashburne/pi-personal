@@ -23,6 +23,10 @@ set +a
 : "${SENDBLUE_API_KEY_SECRET:?}"
 : "${SENDBLUE_WEBHOOK_SECRET:?}"
 
+# Sprite CLI uses SPRITE_URL as its API endpoint. .env uses the same name
+# for the public VM origin, so drop it before calling `sprite`.
+unset SPRITE_URL
+
 if ! command -v sprite >/dev/null 2>&1; then
   echo "sprite CLI not found. Run ./scripts/install-clis.sh then sprite login." >&2
   exit 1
