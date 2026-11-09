@@ -136,6 +136,12 @@ if [[ -n "${DASHBOARD_SECRET:-}" ]]; then
 else
   echo "Settings dashboard: off (set DASHBOARD_SECRET in .env to enable)"
 fi
+if [[ -n "${HEARTBEAT_SECRET:-}" ]]; then
+  echo "Home heartbeat (Mac or Raspberry Pi: ./scripts/install-home.sh):"
+  echo "  ${ORIGIN}/heartbeat/${HEARTBEAT_SECRET}"
+else
+  echo "Home heartbeat: off (set HEARTBEAT_SECRET in .env to enable)"
+fi
 echo
 
 if [[ "${REGISTER_WEBHOOK:-}" == "1" ]]; then

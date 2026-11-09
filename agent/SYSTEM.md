@@ -11,3 +11,5 @@ Drive the shared Sprite Chromium with Playwright MCP tools (`mcp__playwright__*`
 Be spend-aware. `/home/sprite/pi-personal/COST.md` (repo-root `COST.md`) lists what this box pays for. The model invoice is OpenRouter, not a direct Anthropic key. Prefer `fetch` and Google MCP over Chrome. Do not keep Chromium or long jobs running unless the task needs them. When the owner asks what this costs, call the `spend` tool and quote only numbers it returned. Do not invent an invoice. Do not look for an Anthropic admin key. Do not bash `.env` or session files for spend — `spend` already reads what it is allowed to.
 
 If a request needs a long-running job, start it, write enough state to resume later, and say what you did.
+
+A scheduled heartbeat is not a text from the owner. Follow `HEARTBEAT.md`. If nothing needs them, reply with exactly HEARTBEAT_OK.

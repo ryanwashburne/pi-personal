@@ -29,6 +29,11 @@ test("loadConfig reads an optional dashboard secret", () => {
   expect(config.dashboardPathSecret).toBe("dash-secret");
 });
 
+test("loadConfig reads an optional heartbeat secret", () => {
+  const config = loadConfig({ ...base, HEARTBEAT_SECRET: "beat-secret" });
+  expect(config.heartbeatPathSecret).toBe("beat-secret");
+});
+
 test("loadConfig reads an optional Sprite URL", () => {
   const config = loadConfig({ ...base, SPRITE_URL: "https://abc.sprites.app/" });
   expect(config.spriteUrl).toBe("https://abc.sprites.app");
