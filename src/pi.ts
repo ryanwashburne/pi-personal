@@ -30,7 +30,14 @@ export const PI_RPC_TOOLS =
 
 const RPC_ACK_TIMEOUT_MS = 30_000;
 
-export function createPiAgent(config: Config): PiAgent {
+export type PiAgentOptions = {
+  sessionId?: string;
+  name?: string;
+};
+
+export function createPiAgent(config: Config, options: PiAgentOptions = {}): PiAgent {
+  const sessionId = options.sessionId ?? "imessage";
+  const name = options.name ?? sessionId;
   let child: ChildProcessWithoutNullStreams | undefined;
   let buffer = "";
   let requestId = 0;
@@ -59,10 +66,10 @@ export function createPiAgent(config: Config): PiAgent {
       "--session-dir",
       config.sessionDir,
       "--session-id",
-      "imessage",
+      sessionId,
       "--approve",
       "--name",
-      "imessage",
+      name,
       "--system-prompt",
       `${config.agentCwd}/SYSTEM.md`,
       "--tools",

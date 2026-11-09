@@ -13,7 +13,7 @@ if [[ "$SCRIPT_SOURCE" != /* ]]; then
   SCRIPT_SOURCE="$(pwd)/$SCRIPT_SOURCE"
 fi
 OS="$(uname -s)"
-INTERVAL_DEFAULT=1800
+INTERVAL_DEFAULT=7200
 
 if [[ -d /.sprite || -d /home/sprite ]]; then
   echo "This looks like the Sprite. Run this on the Mac or Raspberry Pi." >&2
