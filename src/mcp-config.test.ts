@@ -147,3 +147,11 @@ test("reserves Google MCP names unless allowReserved is set", async () => {
   expect(raw.mcpServers.gmail.description).toBe("Gmail MCP");
   expect(raw.mcpServers.gmail.headers?.Authorization).toBe("!/bin/echo Bearer token");
 });
+
+test("runtime MCP config is gitignored and not shipped by provision", async () => {
+  const root = join(import.meta.dir, "..");
+  const gitignore = await readFile(join(root, ".gitignore"), "utf8");
+  expect(gitignore).toContain("agent/.pi/mcp.json");
+  const provision = await readFile(join(root, "scripts/provision.sh"), "utf8");
+  expect(provision).toContain("--exclude agent/.pi/mcp.json");
+});
