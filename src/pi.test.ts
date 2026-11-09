@@ -6,12 +6,13 @@ import { expect, test } from "bun:test";
 import type { Config } from "./config";
 import { createPiAgent, PI_RPC_TOOLS } from "./pi";
 
-test("RPC tool allowlist declares MCP, fetch, spend, codemode, and tool_search", () => {
+test("RPC tool allowlist declares MCP, fetch, spend, routine, codemode, and tool_search", () => {
   expect(PI_RPC_TOOLS).toContain("mcp__*");
   expect(PI_RPC_TOOLS).toContain("codemode");
   expect(PI_RPC_TOOLS).toContain("tool_search");
   expect(PI_RPC_TOOLS).toContain("fetch");
   expect(PI_RPC_TOOLS).toContain("spend");
+  expect(PI_RPC_TOOLS).toContain("routine");
   expect(PI_RPC_TOOLS).toContain("read");
   expect(PI_RPC_TOOLS).toContain("bash");
 });
@@ -22,6 +23,7 @@ test("Pi workspace documents iMessage-safe replies", () => {
   const agents = readFileSync(join(agentDir, "AGENTS.md"), "utf8");
   const imessage = readFileSync(join(agentDir, "imessage.md"), "utf8");
   const heartbeat = readFileSync(join(agentDir, "HEARTBEAT.md"), "utf8");
+  const routines = readFileSync(join(agentDir, "ROUTINES.md"), "utf8");
 
   expect(system).toMatch(/iMessage only/i);
   expect(system).toMatch(/stop or cancel/i);
@@ -39,6 +41,12 @@ test("Pi workspace documents iMessage-safe replies", () => {
   expect(heartbeat).toContain("HEARTBEAT-STATE.md");
   expect(heartbeat).toMatch(/Do not use Chrome/i);
   expect(heartbeat).toMatch(/cannot send/i);
+  expect(system).toContain("ROUTINES.md");
+  expect(system).toContain("routine");
+  expect(agents).toContain("ROUTINES.md");
+  expect(routines).toContain("routine");
+  expect(routines).toContain("HEARTBEAT_OK");
+  expect(routines).toMatch(/5-field cron/i);
 });
 
 test("Pi workspace documents shared Chrome and the live view URL", () => {

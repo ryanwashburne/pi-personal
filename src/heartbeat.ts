@@ -2,8 +2,8 @@ import type { Config } from "./config";
 import { promptWithLiveView, syncLiveViewFile } from "./live-view";
 import type { PiAgent } from "./pi";
 import type { GatewayResult } from "./result";
+import { runScheduledTurn } from "./scheduled";
 import type { SendblueClient } from "./sendblue";
-import { splitMessage } from "./split";
 import type { Hold } from "./tasks";
 
 export const HEARTBEAT_OK = "HEARTBEAT_OK";
@@ -98,41 +98,18 @@ export function handleHeartbeat(request: Request, options: HeartbeatOptions): Ga
     status: 200,
     body: "ok",
     work: async () => {
-      const taskP = options.hold().catch((error) => {
-        console.warn("heartbeat task hold failed", error);
-        return { async heartbeat() {}, async release() {} };
+      const live = syncLiveViewFile(options.config, request.headers);
+      const quietHours = isQuietHours(options.now?.() ?? new Date());
+      await runScheduledTurn({
+        label: quietHours ? "heartbeat quiet hours" : "heartbeat",
+        prompt: heartbeatPrompt(live.liveViewUrl, quietHours),
+        pi: options.pi,
+        sendblue: options.sendblue,
+        to: options.config.allowedPhone,
+        hold: options.hold,
+        setBusy: options.setBusy,
+        shouldDeliver: (text) => !isSilentHeartbeat(text) && !quietHours,
       });
-      try {
-        const live = syncLiveViewFile(options.config, request.headers);
-        const quietHours = isQuietHours(options.now?.() ?? new Date());
-        const result = await options.pi.prompt(heartbeatPrompt(live.liveViewUrl, quietHours));
-        switch (result.kind) {
-          case "injected":
-            console.log("heartbeat injected");
-            break;
-          case "reply": {
-            if (isSilentHeartbeat(result.text) || quietHours) {
-              console.log(quietHours ? "heartbeat quiet hours" : "heartbeat silent");
-              break;
-            }
-            console.log(`heartbeat reply (${result.text.length} chars)`);
-            for (const chunk of splitMessage(result.text)) {
-              await options.sendblue.sendMessage(options.config.allowedPhone, chunk);
-            }
-            break;
-          }
-          default: {
-            const _never: never = result;
-            throw new Error(`unexpected heartbeat result ${JSON.stringify(_never)}`);
-          }
-        }
-      } catch (error) {
-        console.error("heartbeat turn failed", error);
-      } finally {
-        options.setBusy(false);
-        const task = await taskP;
-        await task.release().catch((releaseError) => console.warn("heartbeat task release failed", releaseError));
-      }
     },
   };
 }

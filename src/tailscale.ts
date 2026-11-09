@@ -10,6 +10,7 @@ export type TailscaleStatus = {
   running: boolean;
   hasAuthKey: boolean;
   exitNode?: string;
+  exitNodeIp?: string;
   socksUrl?: string;
   error?: string;
 };
@@ -48,6 +49,7 @@ export function createTailscale(options: TailscaleOptions): TailscaleService {
   let stopping = false;
   let error: string | undefined;
   let daemon: ChildProcess | undefined;
+  let exitNodeIp: string | undefined;
 
   function configured(): boolean {
     return Boolean(options.authKey && options.exitNode);
@@ -59,6 +61,7 @@ export function createTailscale(options: TailscaleOptions): TailscaleService {
       running,
       hasAuthKey: Boolean(options.authKey),
       exitNode: options.exitNode,
+      exitNodeIp: running ? exitNodeIp : undefined,
       socksUrl: running ? `socks5://127.0.0.1:${socksPort}` : undefined,
       error,
     };
@@ -124,6 +127,7 @@ export function createTailscale(options: TailscaleOptions): TailscaleService {
         logs,
         "set --exit-node",
       );
+      exitNodeIp = picked.ip;
       running = true;
     } catch (caught) {
       error = caught instanceof Error ? caught.message : String(caught);
@@ -137,6 +141,7 @@ export function createTailscale(options: TailscaleOptions): TailscaleService {
   async function stop() {
     stopping = true;
     running = false;
+    exitNodeIp = undefined;
     const child = daemon;
     daemon = undefined;
     if (child && child.exitCode === null) {

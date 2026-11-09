@@ -6,6 +6,7 @@ import { browserWsPath } from "./dashboard";
 import { HEARTBEAT_SESSION_ID } from "./heartbeat";
 import { createPiAgent, type PiAgent } from "./pi";
 import { internalListenPort } from "./playwright-mcp";
+import { handleRoutineAdmin, ROUTINES_SESSION_ID } from "./routines";
 import type { SendblueClient } from "./sendblue";
 import { createTailscale } from "./tailscale";
 import { attachVncWebSocket, toBuffer, vncProtocolHeaders, type VncProxy } from "./vnc-proxy";
@@ -40,15 +41,18 @@ export async function startApp(options: { config: Config; sendblue: SendblueClie
 
   const imessagePi = createPiAgent(config);
   const heartbeatPi = createPiAgent(config, { sessionId: HEARTBEAT_SESSION_ID, name: HEARTBEAT_SESSION_ID });
+  const routinesPi = createPiAgent(config, { sessionId: ROUTINES_SESSION_ID, name: ROUTINES_SESSION_ID });
   const pi: PiAgent = {
     prompt: (message) => imessagePi.prompt(message),
     async restart() {
       await imessagePi.restart();
       await heartbeatPi.restart();
+      await routinesPi.restart();
     },
     async stop() {
       await imessagePi.stop();
       await heartbeatPi.stop();
+      await routinesPi.stop();
     },
   };
   const tailscale = createTailscale({
@@ -72,6 +76,7 @@ export async function startApp(options: { config: Config; sendblue: SendblueClie
     sendblue,
     pi,
     heartbeatPi,
+    routinesPi,
     browser,
     tailscale,
   });
@@ -82,6 +87,10 @@ export async function startApp(options: { config: Config; sendblue: SendblueClie
     hostname: "127.0.0.1",
     port: internalPort,
     async fetch(request) {
+      const admin = await handleRoutineAdmin(request, { config, tailscale });
+      if (admin) {
+        return new Response(admin.body, { status: admin.status, headers: admin.headers });
+      }
       const result = await handleBrowserEnsure(request, browser);
       return new Response(result.body, { status: result.status, headers: result.headers });
     },
