@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "safety": {
+    "level": "standard"
+  },
+  "secret_protection": {
+    "enabled": true,
+    "deny_paths": [
+      "browser-profile",
+      "sessions",
+      ".pi/mcp.json",
+      "~/.pi/agent/mcp.json",
+      "/home/sprite/pi-personal/.env"
+    ]
+  }
+}
