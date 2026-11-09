@@ -42,11 +42,11 @@ test("loadConfig reads an optional user MCP config path", () => {
 test("loadConfig reads optional Tailscale exit-node settings", () => {
   const config = loadConfig({
     ...base,
-    TAILSCALE_AUTHKEY: "tskey-auth-test",
-    TAILSCALE_EXIT_NODE: "ryans-macbook",
+    TAILSCALE_AUTHKEY: '"tskey-auth-test"',
+    TAILSCALE_EXIT_NODE: "ryans-macbook.tailnet.ts.net.",
   });
   expect(config.tailscaleAuthKey).toBe("tskey-auth-test");
-  expect(config.tailscaleExitNode).toBe("ryans-macbook");
+  expect(config.tailscaleExitNode).toBe("ryans-macbook.tailnet.ts.net");
   expect(config.tailscaleSocksPort).toBe(1055);
 });
 
