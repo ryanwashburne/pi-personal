@@ -21,6 +21,7 @@ test("loadConfig requires allowlisted phone", () => {
   expect(config.port).toBe(8080);
   expect(config.dashboardPathSecret).toBeUndefined();
   expect(config.mcpConfigPath).toBe("/home/sprite/agent/.pi/mcp.json");
+  expect(config.userMcpPath.endsWith(".pi/agent/mcp.json")).toBe(true);
 });
 
 test("loadConfig reads an optional dashboard secret", () => {
@@ -31,6 +32,11 @@ test("loadConfig reads an optional dashboard secret", () => {
 test("loadConfig reads an optional MCP config path", () => {
   const config = loadConfig({ ...base, MCP_CONFIG_PATH: "/tmp/custom-mcp.json" });
   expect(config.mcpConfigPath).toBe("/tmp/custom-mcp.json");
+});
+
+test("loadConfig reads an optional user MCP config path", () => {
+  const config = loadConfig({ ...base, MCP_USER_CONFIG_PATH: "/tmp/user-mcp.json" });
+  expect(config.userMcpPath).toBe("/tmp/user-mcp.json");
 });
 
 test("loadConfig throws when required values are missing", () => {

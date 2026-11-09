@@ -16,6 +16,8 @@ export type PiAgent = {
   stop: () => Promise<void>;
 };
 
+export const PI_RPC_TOOLS = "read,bash,edit,write,grep,find,ls,codemode,tool_search,mcp__*";
+
 export function createPiAgent(config: Config): PiAgent {
   let child: ChildProcessWithoutNullStreams | undefined;
   let buffer = "";
@@ -54,7 +56,7 @@ export function createPiAgent(config: Config): PiAgent {
       "--system-prompt",
       `${config.agentCwd}/SYSTEM.md`,
       "--tools",
-      "read,bash,edit,write,grep,find,ls,mcp__*",
+      PI_RPC_TOOLS,
     ];
     if (config.piProvider) args.push("--provider", config.piProvider);
     if (config.piModel) args.push("--model", config.piModel);
@@ -195,7 +197,14 @@ export function createPiAgent(config: Config): PiAgent {
     const proc = child;
     child = undefined;
     starting = undefined;
-    proc?.kill("SIGTERM");
+    if (!proc) return;
+    proc.kill("SIGTERM");
+    await Promise.race([
+      new Promise<void>((resolve) => {
+        proc.once("exit", () => resolve());
+      }),
+      delay(2000),
+    ]);
   }
 
   return {
