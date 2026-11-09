@@ -7,7 +7,7 @@ This directory is Pi's working tree on the Sprite. Repo-root `AGENTS.md` is for 
 - `live-view.md` — public live-view URL (gitignored; written by the gateway)
 - `memory/NOTES.md` — durable notes across sleeps
 - `logins.md` — site usernames/passwords (gitignored; do not commit)
-- `.cc-safety-net/policy.json` — extra secret deny paths for CC Safety Net (Pi on the Sprite). Do not deny `logins.md` or `live-view.md`; Pi must read those.
+- `.cc-safety-net/policy.json` — extra secret deny paths for CC Safety Net (Pi on the Sprite). Do not deny `logins.md` or `live-view.md`; Pi must read those. Google OAuth tokens live in `~/.pi/agent/google-oauth.json` and are denied.
 - `.pi/extensions/fetch/` — keyless `fetch` tool for public http(s) URLs
 - `sessions/` — Pi session files (do not edit by hand)
 - `state/` — webhook dedupe; owned by the gateway

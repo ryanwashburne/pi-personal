@@ -22,6 +22,9 @@ export type Config = {
   tailscaleAuthKey: string | undefined;
   tailscaleExitNode: string | undefined;
   tailscaleSocksPort: number;
+  googleOAuthClientId?: string;
+  googleOAuthClientSecret?: string;
+  googleOAuthTokenPath?: string;
 };
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
@@ -59,6 +62,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     tailscaleAuthKey: emptyToUndefined(unquote(env.TAILSCALE_AUTHKEY)),
     tailscaleExitNode: emptyToUndefined(unquote(env.TAILSCALE_EXIT_NODE)?.replace(/\.+$/, "")),
     tailscaleSocksPort: Number(env.TAILSCALE_SOCKS_PORT ?? 1055),
+    googleOAuthClientId: emptyToUndefined(env.GOOGLE_OAUTH_CLIENT_ID),
+    googleOAuthClientSecret: emptyToUndefined(env.GOOGLE_OAUTH_CLIENT_SECRET),
+    googleOAuthTokenPath: emptyToUndefined(env.GOOGLE_OAUTH_TOKEN_PATH),
   };
 }
 

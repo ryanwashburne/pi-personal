@@ -30,7 +30,7 @@ Do not commit unless asked. Do not push unless asked.
 
 **Always**
 
-- Treat `.env`, `agent/logins.md`, `agent/live-view.md`, `agent/browser-profile/`, and `agent/sessions/` as secret.
+- Treat `.env`, `agent/logins.md`, `agent/live-view.md`, `agent/browser-profile/`, `agent/sessions/`, and `~/.pi/agent/google-oauth.json` as secret.
 - Prefer headings-only checks for `agent/logins.md` (site names exist / fields non-empty). Never print field values.
 - Prefer existence-only checks for `agent/live-view.md`. Never print it — the path is `DASHBOARD_SECRET`.
 - Run `bun test` after gateway changes.

@@ -14,11 +14,16 @@ export type ListedMcpServer = {
 };
 
 export const BROWSER_MCP_NAME = "playwright";
+export const GOOGLE_MCP_NAMES = ["gmail", "calendar", "drive"] as const;
+export type GoogleMcpName = (typeof GOOGLE_MCP_NAMES)[number];
 
 export type AddHttpMcpServer = {
   name: string;
   url: string;
   bearerToken?: string;
+  description?: string;
+  authorizationCommand?: string;
+  allowReserved?: boolean;
 };
 
 export type AddStdioMcpServer = {
@@ -29,6 +34,14 @@ export type AddStdioMcpServer = {
 
 export function isBuiltinMcpServer(name: string): boolean {
   return name.trim() === BROWSER_MCP_NAME;
+}
+
+export function isGoogleMcpServer(name: string): boolean {
+  return (GOOGLE_MCP_NAMES as readonly string[]).includes(name.trim());
+}
+
+export function isReservedMcpName(name: string): boolean {
+  return isBuiltinMcpServer(name) || isGoogleMcpServer(name);
 }
 
 type McpFile = {
@@ -148,8 +161,8 @@ export async function listMcpServers(path: string): Promise<ListedMcpServer[]> {
 export async function addHttpMcpServer(path: string, input: AddHttpMcpServer): Promise<void> {
   const nameError = validateMcpName(input.name);
   if (nameError) throw new Error(nameError);
-  if (isBuiltinMcpServer(input.name)) {
-    throw new Error(`Name ${BROWSER_MCP_NAME} is reserved for Sprite Chromium.`);
+  if (!input.allowReserved && isReservedMcpName(input.name)) {
+    throw new Error(reservedMcpNameError(input.name));
   }
   const urlError = validateMcpUrl(input.url);
   if (urlError) throw new Error(urlError);
@@ -170,12 +183,19 @@ export async function addHttpMcpServer(path: string, input: AddHttpMcpServer): P
   delete next.command;
   delete next.args;
 
+  const description = input.description?.trim();
+  if (description) next.description = description;
+
+  const headers =
+    existing.headers && typeof existing.headers === "object"
+      ? { ...(existing.headers as Record<string, unknown>) }
+      : {};
+  const command = input.authorizationCommand?.trim();
   const token = input.bearerToken?.trim();
-  if (token) {
-    const headers =
-      existing.headers && typeof existing.headers === "object"
-        ? { ...(existing.headers as Record<string, unknown>) }
-        : {};
+  if (command) {
+    headers.Authorization = `!${command}`;
+    next.headers = headers;
+  } else if (token) {
     headers.Authorization = `Bearer ${token}`;
     next.headers = headers;
   }
@@ -233,6 +253,16 @@ async function readMcpFile(path: string): Promise<McpFile> {
 async function writeMcpFile(path: string, file: McpFile): Promise<void> {
   await mkdir(dirname(path), { recursive: true });
   await writeFile(path, `${JSON.stringify(file, null, 2)}\n`);
+}
+
+export function reservedMcpNameError(name: string): string {
+  if (isBuiltinMcpServer(name)) {
+    return `Name ${BROWSER_MCP_NAME} is reserved for Sprite Chromium.`;
+  }
+  if (isGoogleMcpServer(name)) {
+    return "gmail, calendar, and drive are reserved for Google Workspace. Connect them on this page.";
+  }
+  return `Name ${name.trim()} is reserved.`;
 }
 
 function hasAuth(entry: Record<string, unknown>): boolean {

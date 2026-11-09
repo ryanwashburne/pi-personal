@@ -36,7 +36,7 @@ Fill `.env` (this file is gitignored):
 
 That creates Sprite `pi-personal`, copies this repo onto it, installs `gateway` as the HTTP service, and prints the public webhook URL and settings page. Re-run with `REGISTER_WEBHOOK=1` to append that URL on your Sendblue account, or paste it in the Sendblue dashboard yourself.
 
-The Sprite already hosts HTTP on port 8080. The settings page is the same public `*.sprites.app` URL, at `/settings/$DASHBOARD_SECRET`. Open it in a browser to add an extra HTTP MCP server (your URL, optional bearer token) and to watch Sprite Chromium. Pi starts that Chromium itself when a text needs the web; Playwright MCP then drives it (`mcp__playwright__*`). **Open live view** (`/settings/$DASHBOARD_SECRET/browser`) streams the same window so you can watch or log into sites yourself — never text passwords. ⌘V / Ctrl+V (or the Paste button) types into that Chrome. Cookies stay in `agent/browser-profile/` across sleeps. Do not share that link; it is the only auth on the page. The webhook path stays separate so Sendblue never sees the dashboard secret.
+The Sprite already hosts HTTP on port 8080. The settings page is the same public `*.sprites.app` URL, at `/settings/$DASHBOARD_SECRET`. Open it in a browser to connect Gmail/Calendar/Drive, add an extra HTTP MCP server (your URL, optional bearer token), and watch Sprite Chromium. Pi starts that Chromium itself when a text needs the web; Playwright MCP then drives it (`mcp__playwright__*`). **Open live view** (`/settings/$DASHBOARD_SECRET/browser`) streams the same window so you can watch or log into sites yourself — never text passwords. ⌘V / Ctrl+V (or the Paste button) types into that Chrome. Cookies stay in `agent/browser-profile/` across sleeps. Do not share that link; it is the only auth on the page. The webhook path stays separate so Sendblue never sees the dashboard secret.
 
 `provision.sh` writes `SPRITE_URL` into `.env`. The gateway copies the live-view URL into gitignored `agent/live-view.md` and prefixes it on each Pi prompt, so when Chrome needs you, Pi can iMessage that link as a bare URL.
 
@@ -51,9 +51,21 @@ Each script advertises that machine as an exit node and prints the `TAILSCALE_EX
 
 The iMessage agent does **not** run on the Raspberry Pi. Do not install the gateway, Sendblue, or Chrome there. Hardware, forgotten-login recovery, and the on-device script are in [Raspberry Pi (home exit node)](#raspberry-pi-home-exit-node).
 
-Pi always reads `~/.pi/agent/mcp.json`. With `--approve` it also reads `.pi/mcp.json` in the agent workspace. The gateway writes a built-in Playwright stdio server into **both** so Pi can start Chromium and control it over CDP (`127.0.0.1:9222`). The settings page adds extra HTTP servers the same way, with `exposure: "direct"` so tools are declared to the model as `mcp__<name>__<tool>`. The settings page also runs `pi mcp list` so you can see connect errors instead of an empty tool list. An agent-started browser does not take the Sprite `browser` task hold — after the reply the Sprite can sleep and Chrome dies; cookies stay on disk. Start from settings if you want the box held awake for a live-view login.
+Pi always reads `~/.pi/agent/mcp.json`. With `--approve` it also reads `.pi/mcp.json` in the agent workspace. The gateway writes a built-in Playwright stdio server into **both** so Pi can start Chromium and control it over CDP (`127.0.0.1:9222`). After you connect Google on the settings page, it also writes Gmail, Calendar, and Drive HTTP servers (`mcp__gmail__*`, `mcp__calendar__*`, `mcp__drive__*`). Tokens stay in `~/.pi/agent/google-oauth.json` on the Sprite. The settings page adds extra HTTP servers the same way, with `exposure: "direct"` so tools are declared to the model as `mcp__<name>__<tool>`. The settings page also runs `pi mcp list` so you can see connect errors instead of an empty tool list. An agent-started browser does not take the Sprite `browser` task hold — after the reply the Sprite can sleep and Chrome dies; cookies stay on disk. Start from settings if you want the box held awake for a live-view login.
 
-`provision.sh` also runs `pi install npm:cc-safety-net`. That extension blocks `.env`, SSH keys, and the extra paths in `agent/.cc-safety-net/policy.json` (`browser-profile`, sessions, MCP config, the gateway `.env`). It does **not** block `logins.md` or `live-view.md` — Pi has to read those. Built-in `fetch` (no API key) loads public http(s) pages without Chrome; Playwright stays for logins and JS. The RPC allowlist in the gateway includes `fetch`.
+### Google Workspace MCP
+
+Google hosts remote MCP servers for Gmail, Calendar, and Drive. This app does not ship a client secret; you create a Google Cloud OAuth web client and paste its ID/secret into `.env`.
+
+1. In Google Cloud, enable Gmail API, Google Calendar API, Google Drive API, plus **Gmail MCP API**, **Google Calendar MCP API**, and **Google Drive MCP API**.
+2. Configure the OAuth consent screen (External is fine for a personal account; add yourself as a test user). Add the Gmail, Calendar, and Drive scopes listed on the settings page.
+3. Create an OAuth client of type **Web application**. Check **Use this client for an AI-powered agent**.
+4. Put `GOOGLE_OAUTH_CLIENT_ID` and `GOOGLE_OAUTH_CLIENT_SECRET` in `.env` and re-run `./scripts/provision.sh`.
+5. Open the settings page, copy the **Redirect URI** into that OAuth client's Authorized redirect URIs, then click **Connect Google**.
+
+Workspace MCP is still in Google's developer preview; join that program if Google rejects MCP calls. Gmail MCP can draft and cannot send. Tokens persist in `~/.pi/agent/google-oauth.json` across provision (that path is not under `agent/`).
+
+`provision.sh` also runs `pi install npm:cc-safety-net`. That extension blocks `.env`, SSH keys, and the extra paths in `agent/.cc-safety-net/policy.json` (`browser-profile`, sessions, MCP config, the gateway `.env`, Google OAuth tokens). It does **not** block `logins.md` or `live-view.md` — Pi has to read those. Built-in `fetch` (no API key) loads public http(s) pages without Chrome; Playwright stays for logins and JS. The RPC allowlist in the gateway includes `fetch`.
 
 First-time Pi login on the Sprite:
 
@@ -125,5 +137,6 @@ The gateway can also run on your laptop (`bun start`) with the same `.env` if yo
 - `agent/logins.md` (site usernames and passwords)
 - `agent/live-view.md` (public live-view URL; embeds `DASHBOARD_SECRET`)
 - Pi `auth.json` / provider credentials
+- `~/.pi/agent/google-oauth.json` (Google Workspace MCP tokens on the Sprite)
 
 Access control for the live agent is the unguessable webhook path, the Sendblue signing secret, the phone allowlist in `.env`, and the unguessable settings path (that same path is the only lock on the streamed browser). Sendblue keys stay in the gateway. Pi does not get a “text anyone” tool.
