@@ -4,6 +4,9 @@ import { createSendblueClient } from "./sendblue";
 
 const config = loadConfig();
 const sendblue = createSendblueClient(config);
+// Account-level. Sendblue already decided auto-typing for the inbound that
+// woke this process; this call cannot cover that window. It only arms the
+// *next* inbound if provision never ran.
 void sendblue.enableAutoTyping?.().catch((error) => {
   console.warn("auto typing failed", error);
 });
@@ -66,9 +69,9 @@ const server = Bun.serve({
 
 console.log(`pi-personal listening on :${server.port}`);
 
-// Bind first, then load dashboard/MCP/Google. Sprite forwards the waking
-// webhook as soon as something listens; “…” can go out before those modules
-// finish evaluating.
+// Bind first so Fly can deliver the webhook as soon as this process exists.
+// That is after warmup. Warmup “…” is Sendblue auto-typing from provision —
+// this process is not running yet (cold) or was frozen (warm).
 void import("./app")
   .then((mod) => mod.startApp({ config, sendblue }))
   .then((app) => resolveApp(app))

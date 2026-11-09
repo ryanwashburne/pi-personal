@@ -31,7 +31,7 @@ export type Gateway = {
   handle: (request: Request) => Promise<GatewayResult>;
 };
 
-/** Refresh iMessage “…” before Sendblue’s default 60s typing window expires. */
+/** Refresh iMessage “…” while Pi thinks (after this process is up). Too late for Fly warmup. */
 export const TYPING_PULSE_MS = 45_000;
 
 type GatewayOptions = {

@@ -9,8 +9,8 @@ This repo is meant to be public. Keep secrets in `.env` on your machine and on t
 ## Flow
 
 1. You iMessage the Sendblue number from your allowlisted phone.
-2. Sendblue POSTs to the Sprite URL. That request wakes the VM (about 100–500ms warm, 1–2s cold). Provisioning turns on Sendblue auto-typing so Apple shows “…” as soon as your inbound hits Sendblue — before the Sprite process exists.
-3. The gateway binds a tiny HTTP listener first (config + Sendblue only), sends/refreshes typing as soon as the webhook lands, then loads MCP/Google/Playwright and holds the Sprite awake with the open webhook connection (and the Tasks API) while Pi runs.
+2. Sendblue receives that inbound on its Mac. If auto-typing is already on, Sendblue itself sends “…” and then POSTs to the Sprite URL. That POST wakes the VM (about 100–500ms warm, 1–2s cold). The Sprite process is not running yet (cold) or is frozen (warm), so nothing in this repo can produce dots during warmup. Auto-typing is an account setting turned on by `./scripts/provision.sh` — not by a GitHub merge, and not by gateway boot (boot-time enable takes effect on the *next* inbound).
+3. After Fly has forwarded the POST, the gateway binds HTTP, refreshes typing while Pi works, and holds the Sprite awake with the open webhook connection (and the Tasks API). Binding earlier / typing as soon as the webhook lands / pulsing while Pi thinks all happen on this side of that wake. They can cover the “Pi is thinking” window. They cannot cover sandbox warmup.
 4. Another text while Pi is working steers the current turn after the in-flight tool call. `STOP` / `cancel` aborts it. Pi's reply goes back out through Sendblue. The hold is released and the Sprite sleeps.
 
 ## Setup
@@ -76,7 +76,9 @@ sprite console -s pi-personal
 pi auth login openrouter --api-key
 ```
 
-Text the Sendblue number from `ALLOWED_PHONE`. You should get a typing indicator on a warm or cold wake, then a reply. After a few idle minutes the Sprite sleeps; the next text wakes it. Re-run `./scripts/provision.sh` after pulling so Sendblue auto-typing is enabled on the account (it takes effect on the next inbound).
+Text the Sendblue number from `ALLOWED_PHONE`. After `./scripts/provision.sh` has enabled Sendblue auto-typing, inbound iMessage can show “…” *before* this process exists. A git pull/merge does not flip that toggle — provision does, and it applies to the next inbound.
+
+After a long sleep with no outbound from this number, Apple/Sendblue often drop typing (best-effort; they need a recent conversation). The phone may show nothing, then a reply just appears, even once the box is up and Pi is working. That is not bind order. Later texts in the same wake usually show “…” from the gateway pulse. Heartbeat iMessages during the day can keep the conversation “recent”; quiet hours and long sleeps still open a gap. After a few idle minutes the Sprite sleeps; the next text wakes it.
 
 Logs:
 
@@ -128,7 +130,7 @@ The gateway can also run on your laptop (`bun start`) with the same `.env` if yo
 
 - `src/` — webhook gateway (Bun), including the settings live-view browser
 - `agent/` — Pi working tree (`SYSTEM.md`, notes, `chrome.md`). Copied to `/home/sprite/agent` on the Sprite
-- `scripts/provision.sh` — create/update the Sprite; installs Google Chrome, Xvfb, x11vnc, Tailscale if missing, and CC Safety Net into Pi
+- `scripts/provision.sh` — create/update the Sprite; installs Google Chrome, Xvfb, x11vnc, Tailscale if missing, and CC Safety Net into Pi; enables Sendblue auto-typing
 - `scripts/install-home.sh` — Mac or Raspberry Pi: Tailscale exit node + Sprite heartbeat ping + routines
 - `scripts/home-daemon.py` — scheduler the home installer runs (stdlib Python)
 - `scripts/setup-macos-exit-node.sh` / `scripts/setup-rpi-exit-node.sh` — aliases for `install-home.sh`

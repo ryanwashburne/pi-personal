@@ -166,7 +166,7 @@ else
 fi
 echo
 
-echo "Enabling Sendblue auto typing (covers Sprite warm/cold wake before our process exists)..."
+echo "Enabling Sendblue auto-typing (the only way “…” can show while Fly is still warming this Sprite)..."
 if curl -sS -X POST "https://api.sendblue.com/accounts/settings/auto-typing-indicator" \
   -H "sb-api-key-id: $SENDBLUE_API_KEY_ID" \
   -H "sb-api-secret-key: $SENDBLUE_API_KEY_SECRET" \
@@ -178,9 +178,10 @@ try:
 except Exception:
     sys.exit(1)
 sys.exit(0 if data.get("auto_typing_indicator") is True else 1)'; then
-  echo "Sendblue auto typing is on."
+  echo "Sendblue auto-typing is on for the next inbound. A GitHub merge does not set this; this provision step does."
+  echo "Apple may still hide “…” after a long idle with no outbound from this number."
 else
-  echo "Warning: could not enable Sendblue auto typing. Inbound “…” during Sprite wake may be missing." >&2
+  echo "Warning: could not enable Sendblue auto-typing. Warmup “…” will be missing until this succeeds." >&2
 fi
 echo
 

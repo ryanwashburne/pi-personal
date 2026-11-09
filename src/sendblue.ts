@@ -72,6 +72,8 @@ export function createSendblueClient(config: Config, fetchFn: SendblueFetch = fe
       }
     },
 
+    // Account setting. Takes effect on the next inbound, not one already in
+    // flight. Provision is what arms warmup “…”; boot is only a self-heal.
     async enableAutoTyping() {
       for (let attempt = 0; attempt < AUTO_TYPING_ATTEMPTS; attempt++) {
         try {

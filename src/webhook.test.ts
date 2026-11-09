@@ -127,7 +127,7 @@ test("acks then replies to an allowlisted inbound text", async () => {
   expect(sent).toEqual(["got it"]);
 });
 
-test("starts typing as soon as an allowlisted inbound is accepted", async () => {
+test("starts typing once an allowlisted inbound is accepted (after this process is up)", async () => {
   const { gateway, typed, prompts } = await setup();
   const result = await gateway.handle(
     post({
@@ -141,7 +141,7 @@ test("starts typing as soon as an allowlisted inbound is accepted", async () => 
   expect(result.work).toBeDefined();
 });
 
-test("refreshes typing while Pi is working", async () => {
+test("refreshes typing while Pi is working, not during Fly warmup", async () => {
   const { gateway, typed } = await setup(
     {},
     {

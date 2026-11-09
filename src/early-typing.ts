@@ -25,8 +25,9 @@ export function webhookSecretOk(request: Request, secret: string): boolean {
 }
 
 /**
- * Fire iMessage “…” as soon as a waking webhook lands, without waiting for
- * gateway init (MCP sync, Google, Playwright). Safe to call on a cloned Request.
+ * Refresh iMessage “…” after this process is accepting HTTP, without waiting
+ * for gateway init (MCP, Google, Playwright). Too late for Fly warmup — that
+ * window is Sendblue auto-typing at inbound time. Safe on a cloned Request.
  */
 export async function startTypingFromRequest(
   request: Request,
@@ -53,7 +54,8 @@ export async function startTypingFromRequest(
 }
 
 /**
- * Bind-time HTTP handler: /health and webhook typing work before `gateway` resolves.
+ * Bind-time HTTP handler: /health and post-wake webhook typing work before
+ * `gateway` resolves. Does not produce dots while the Sprite is still warming.
  */
 export function createFetchHandler(options: {
   config: Config;
