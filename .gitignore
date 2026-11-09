@@ -15,6 +15,7 @@ agent/sessions/
 agent/state/
 agent/browser-profile/
 agent/logins.md
+agent/live-view.md
 browser-bin/
 tailscale-state/
 /.pi/

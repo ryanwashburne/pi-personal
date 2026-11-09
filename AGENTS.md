@@ -9,8 +9,9 @@ This git repo is public. Secrets stay in gitignored files on the Mac and on the 
 ## Layout
 
 - `src/` — Bun webhook gateway, settings page, live-view Chromium
-- `agent/` — copied to `/home/sprite/agent`; Pi’s cwd on the Sprite (`SYSTEM.md`, notes, logins, `imessage.md`)
+- `agent/` — copied to `/home/sprite/agent`; Pi’s cwd on the Sprite (`SYSTEM.md`, notes, logins, `imessage.md`, `chrome.md`)
 - `agent/imessage.md` — what Messages actually renders in Pi’s reply bubble (markdown does not)
+- `agent/chrome.md` — shared Sprite Chromium; live-view URL is generated into gitignored `agent/live-view.md`
 - `scripts/provision.sh` — create/update the Sprite and copy `.env` + `agent/logins.md`
 
 ## Commands
@@ -26,8 +27,9 @@ Do not commit unless asked. Do not push unless asked.
 
 **Always**
 
-- Treat `.env`, `agent/logins.md`, `agent/browser-profile/`, and `agent/sessions/` as secret.
+- Treat `.env`, `agent/logins.md`, `agent/live-view.md`, `agent/browser-profile/`, and `agent/sessions/` as secret.
 - Prefer headings-only checks for `agent/logins.md` (site names exist / fields non-empty). Never print field values.
+- Prefer existence-only checks for `agent/live-view.md`. Never print it — the path is `DASHBOARD_SECRET`.
 - Run `bun test` after gateway changes.
 
 **Ask first**
@@ -38,7 +40,8 @@ Do not commit unless asked. Do not push unless asked.
 **Never**
 
 - **Do not read the contents of `agent/logins.md`.** Do not open it in a file-read tool, dump it, grep field values, or paste usernames/passwords into chat, commits, PRs, or README. Existence and `##` headings only.
+- **Do not read the contents of `agent/live-view.md`.** It embeds `DASHBOARD_SECRET` in the URL. Existence only.
 - Do not read `.env` or print tokens, API keys, phone numbers, or `DASHBOARD_SECRET`.
-- Do not commit `.env`, `agent/logins.md`, `agent/browser-profile/`, `agent/sessions/`, or `agent/state/`.
+- Do not commit `.env`, `agent/logins.md`, `agent/live-view.md`, `agent/browser-profile/`, `agent/sessions/`, or `agent/state/`.
 - Do not put the owner’s 1Password Personal/Private vault or the 1Password browser extension on the Sprite.
 - Do not ask the owner to iMessage a password. Logins happen on the settings-page live view, or Pi fills them with Playwright MCP from `logins.md`.

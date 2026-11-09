@@ -12,6 +12,7 @@ import {
 } from "./mcp-config";
 import { defaultPlaywrightMcp } from "./playwright-mcp";
 import { promptFromInbound, parseInbound } from "./inbound";
+import { promptWithLiveView, syncLiveViewFile } from "./live-view";
 import type { PiAgent } from "./pi";
 import type { GatewayResult } from "./result";
 import { headerValue, secretsEqual } from "./secret";
@@ -56,6 +57,7 @@ export async function createGateway(options: GatewayOptions): Promise<Gateway> {
   }
   const inFlight = new Set<string>();
   const hold = options.hold ?? holdSprite;
+  syncLiveViewFile(options.config);
 
   return {
     async handle(request) {
@@ -121,7 +123,10 @@ export async function createGateway(options: GatewayOptions): Promise<Gateway> {
               console.warn("typing failed", error);
             });
             console.log(`prompt ${inbound.messageHandle}`);
-            const reply = await options.pi.prompt(promptFromInbound(inbound));
+            const live = syncLiveViewFile(options.config, request.headers);
+            const reply = await options.pi.prompt(
+              promptWithLiveView(promptFromInbound(inbound), live.liveViewUrl),
+            );
             console.log(`reply ${inbound.messageHandle} (${reply.length} chars)`);
             const chunks = splitMessage(reply);
             for (const chunk of chunks) {

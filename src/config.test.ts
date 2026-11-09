@@ -29,6 +29,11 @@ test("loadConfig reads an optional dashboard secret", () => {
   expect(config.dashboardPathSecret).toBe("dash-secret");
 });
 
+test("loadConfig reads an optional Sprite URL", () => {
+  const config = loadConfig({ ...base, SPRITE_URL: "https://abc.sprites.app/" });
+  expect(config.spriteUrl).toBe("https://abc.sprites.app");
+});
+
 test("loadConfig reads an optional MCP config path", () => {
   const config = loadConfig({ ...base, MCP_CONFIG_PATH: "/tmp/custom-mcp.json" });
   expect(config.mcpConfigPath).toBe("/tmp/custom-mcp.json");
