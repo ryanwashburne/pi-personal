@@ -8,7 +8,7 @@ This git repo is public. Secrets stay in gitignored files on the Mac and on the 
 
 `PRIVACY.md` is the data-flow map: what Pi sees on the owner’s behalf, which vendors process it, and that Anthropic does not train on commercial API traffic by default. Read it before changing webhooks, sessions, browser, MCP, or logging.
 
-`COST.md` is the spend map: which vendors bill (Sendblue line, Sprite compute, model tokens), published rates, and which actions burn money. Read it before adding paid APIs, changing the model, or keeping the Sprite awake. There is no live spend tool yet — do not invent an invoice.
+`COST.md` is the spend map: which vendors bill (Sendblue line, Sprite compute, model tokens), published rates, and which actions burn money. Live numbers are the Pi `spend` tool (`agent/.pi/extensions/spend/`). Read both before adding paid APIs, changing the model, or keeping the Sprite awake. Do not invent an invoice.
 
 ## Layout
 
@@ -17,10 +17,11 @@ This git repo is public. Secrets stay in gitignored files on the Mac and on the 
 - `agent/imessage.md` — what Messages actually renders in Pi’s reply bubble (markdown does not)
 - `agent/chrome.md` — shared Sprite Chromium; live-view URL is generated into gitignored `agent/live-view.md`
 - `PRIVACY.md` — what data this agent processes and where it goes (LLM, Sendblue, Fly, browser)
-- `COST.md` — what this agent pays for (Sendblue, Sprite, model tokens) until spend tools exist
+- `COST.md` — published rates for Sendblue, Sprite, and model tokens
 - `scripts/provision.sh` — create/update the Sprite and copy `.env` + `agent/logins.md`; installs `cc-safety-net` into Pi
 - `agent/.cc-safety-net/policy.json` — extra deny paths for Pi (`browser-profile`, sessions, MCP files, gateway `.env`). `logins.md` and `live-view.md` stay readable to Pi
 - `agent/.pi/extensions/fetch/` — keyless HTTP `fetch` tool (no search API key)
+- `agent/.pi/extensions/spend/` — live spend tool (do not bypass it by reading session JSONL)
 - `scripts/install-home.sh` — Mac or Raspberry Pi daemon: Tailscale exit node + `/heartbeat` ping (agent stays on the Sprite)
 - `scripts/setup-macos-exit-node.sh` / `scripts/setup-rpi-exit-node.sh` — aliases for `install-home.sh`
 

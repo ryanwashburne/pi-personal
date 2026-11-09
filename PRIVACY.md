@@ -8,9 +8,9 @@ Last reviewed: 9 Nov 2026 (America/New_York). Vendor policies change — re-chec
 
 ## Anthropic: is data passed, and do they train on it?
 
-Yes, prompts are sent to Anthropic (or to OpenRouter, which then forwards them). No: the commercial Claude API does not use those inputs or outputs to train models unless you opt in (thumbs-up feedback, Development Partner Program).
+Yes, prompts go to OpenRouter, which forwards Claude models to Anthropic. No: the commercial Claude API does not use those inputs or outputs to train models unless you opt in (thumbs-up feedback, Development Partner Program).
 
-Pi is a local CLI on the Sprite. It is not the model. On each turn it POSTs the conversation to whichever provider is configured (`PI_PROVIDER` / `PI_MODEL`, or Pi’s default after `pi auth login`). The intended setup is `pi auth login anthropic --api-key` (or `ANTHROPIC_API_KEY`). Confirm that on the Sprite — this file does not read `.env`.
+Pi is a local CLI on the Sprite. It is not the model. On each turn it POSTs the conversation to whichever provider is configured (`PI_PROVIDER` / `PI_MODEL`, or Pi’s default after `pi auth login`). The intended setup is `PI_PROVIDER=openrouter` plus `OPENROUTER_API_KEY` (or `pi auth login openrouter --api-key`). Confirm that on the Sprite — this file does not read `.env`.
 
 | Question | API key / OpenRouter → Anthropic | Claude.ai consumer login |
 | --- | --- | --- |
@@ -26,7 +26,7 @@ Sources: [Is my data used for model training?](https://privacy.claude.com/en/art
 ## How a text is processed
 
 ```
-Owner iPhone → Apple iMessage → Sendblue Mac + API → Fly Sprite gateway → Pi (local tools) → Anthropic / OpenRouter / OpenAI
+Owner iPhone → Apple iMessage → Sendblue Mac + API → Fly Sprite gateway → Pi (local tools) → OpenRouter → upstream model
 Home daemon (Mac/rpi) → HTTPS /heartbeat → Fly Sprite gateway ↗
                                                                                  ↘ Sprite Chromium → Tailscale exit node → websites
 ```
@@ -57,15 +57,15 @@ The reply walks the message path back. Browser traffic is a side path. Sprite di
 | Sendblue | Yes | No indication of ML training; they store and deliver. | Physical Mac minis. HIPAA isolation is a separate product/BAA. [Privacy](https://www.sendblue.com/privacy-policy) · [Security](https://docs.sendblue.com/security/) |
 | Fly / Tigris | Yes, on disk and in logs (partial) | No (your app data). Fly uses other AI vendors on their own platform logs. | Public webhook URL. Settings URL is the only lock on live Chrome. [Privacy](https://fly.io/legal/privacy-policy/) · [Sub-processors](https://fly.io/legal/sub-processors/) · [Sprite disk](https://docs.fly.io/sprites/concepts/lifecycle) |
 | Pi CLI (pi.dev) | Yes, locally. Install telemetry is version-only; off with `PI_TELEMETRY=0`. | No | Sessions stay on disk unless you `/share` or `/bug` a transcript. [Sessions](https://pi.dev/docs/latest/sessions) · [Telemetry](https://pi.dev/docs/latest/environment-variables) |
-| Anthropic API | Yes | No by default | 30-day safety retention. |
-| OpenRouter (if used) | Yes, in transit | No by default | Do not enable prompt logging or the 1% product-improvement toggle. [Data collection](https://openrouter.ai/docs/guides/privacy/data-collection) · [Provider logging](https://openrouter.ai/docs/guides/privacy/provider-logging) |
+| OpenRouter | Yes, in transit | No by default | This app’s model path. Do not enable prompt logging or the 1% product-improvement toggle. [Data collection](https://openrouter.ai/docs/guides/privacy/data-collection) · [Provider logging](https://openrouter.ai/docs/guides/privacy/provider-logging) |
+| Anthropic (upstream via OpenRouter) | Yes, when `PI_MODEL` is `anthropic/…` | No by default | 30-day safety retention on the far side. Not a direct Anthropic key. |
 | OpenAI API (if used) | Yes | No by default | 30-day abuse logs. [Your data](https://developers.openai.com/api/docs/guides/your-data) |
 | Tailscale | No (cannot decrypt) | No | Chrome only. Metadata, not page content. Exit-node destinations not logged by default. [Privacy](https://tailscale.com/legal/privacy-policy) |
 | Websites Pi opens | Yes — logged-in browser from the home IP (or Fly IP if no exit node) | Per site | Cookies persist in `browser-profile`. |
 | jsDelivr (noVNC script) | No message content. The owner’s browser fetches the viewer JS. | No | VNC pixels go Sprite ↔ browser, not through jsDelivr. |
 | Google Chrome | Local profile; may contact Google for updates / Safe Browsing unless disabled | N/A | Dedicated `user-data-dir`. Owner can also sign into a Google account in that profile. |
 
-`.env.example` also accepts `OPENROUTER_API_KEY` and `OPENAI_API_KEY`. If `PI_PROVIDER=openrouter`, two companies see prompts; Anthropic’s 30-day / no-training API policy still applies on the far side.
+`.env.example` is OpenRouter (`OPENROUTER_API_KEY`, `PI_PROVIDER=openrouter`). Two companies see Claude prompts: OpenRouter in transit, Anthropic as upstream. Anthropic’s 30-day / no-training API policy still applies on the far side.
 
 ## What stays on the Sprite
 
@@ -99,6 +99,6 @@ Disk survives sleep; processes do not. These paths are gitignored.
 - Treat the live-view link as shared with the model provider. Rotate `DASHBOARD_SECRET` if a session leaks.
 - Don’t put secrets in the first 80 characters of a text (gateway logs that prefix).
 - Don’t share the settings link. Rotate `DASHBOARD_SECRET`. Consider disabling the dashboard when idle.
-- Prefer `ANTHROPIC_API_KEY` direct over OpenRouter. If staying on OpenRouter, leave logging and training toggles off; pin Anthropic rather than auto-routing to providers that may train.
+- Stay on OpenRouter. Leave OpenRouter logging and training toggles off; pin `anthropic/…` models rather than auto-routing to providers that may train.
 - Accept 30-day provider retention, or request ZDR (paid/sales, and not available for some models).
 - Only add MCP hosts you trust. Bearer tokens never go to git; results still go to the LLM.
