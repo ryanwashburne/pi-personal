@@ -35,6 +35,8 @@ type GatewayOptions = {
   config: Config;
   sendblue: SendblueClient;
   pi: PiAgent;
+  heartbeatPi?: PiAgent;
+  now?: () => Date;
   browser?: BrowserSession;
   tailscale?: TailscaleService;
   dedupe?: Dedupe;
@@ -87,13 +89,14 @@ export async function createGateway(options: GatewayOptions): Promise<Gateway> {
       if (dashboard) return dashboard;
       const heartbeat = handleHeartbeat(request, {
         config: options.config,
-        pi: options.pi,
+        pi: options.heartbeatPi ?? options.pi,
         sendblue: options.sendblue,
         hold,
         isBusy: () => piBusy,
         setBusy: (busy) => {
           piBusy = busy;
         },
+        now: options.now,
       });
       if (heartbeat) return heartbeat;
       if (request.method !== "POST" || url.pathname !== webhookPath(options.config)) {

@@ -4,7 +4,8 @@ import { handleBrowserEnsure } from "./browser-ensure";
 import { createBrowserSession } from "./browser-session";
 import { loadConfig } from "./config";
 import { browserWsPath } from "./dashboard";
-import { createPiAgent } from "./pi";
+import { HEARTBEAT_SESSION_ID } from "./heartbeat";
+import { createPiAgent, type PiAgent } from "./pi";
 import { internalListenPort } from "./playwright-mcp";
 import { createSendblueClient } from "./sendblue";
 import { createTailscale } from "./tailscale";
@@ -15,7 +16,19 @@ const proxies = new WeakMap<object, VncProxy>();
 const config = loadConfig();
 const internalPort = internalListenPort();
 process.env.INTERNAL_PORT = String(internalPort);
-const pi = createPiAgent(config);
+const imessagePi = createPiAgent(config);
+const heartbeatPi = createPiAgent(config, { sessionId: HEARTBEAT_SESSION_ID, name: HEARTBEAT_SESSION_ID });
+const pi: PiAgent = {
+  prompt: (message) => imessagePi.prompt(message),
+  async restart() {
+    await imessagePi.restart();
+    await heartbeatPi.restart();
+  },
+  async stop() {
+    await imessagePi.stop();
+    await heartbeatPi.stop();
+  },
+};
 const tailscale = createTailscale({
   stateDir: join(process.cwd(), "tailscale-state"),
   authKey: config.tailscaleAuthKey,
@@ -39,6 +52,7 @@ const gatewayPromise = createGateway({
   config,
   sendblue,
   pi,
+  heartbeatPi,
   browser,
   tailscale,
 });

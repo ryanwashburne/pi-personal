@@ -1,0 +1,7 @@
+# Heartbeat state
+
+Gitignored. The heartbeat turn updates this so it does not re-text the same item.
+
+## Already considered
+
+- (gmail message ids and calendar event ids, one per line)

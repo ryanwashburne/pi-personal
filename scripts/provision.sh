@@ -48,6 +48,8 @@ sprite exec -- bash -lc "if [ -f $REMOTE_AGENT/.pi/mcp.json ]; then cp $REMOTE_A
 sprite exec -- bash -lc "if [ -f /home/sprite/.pi/agent/mcp.json ]; then cp /home/sprite/.pi/agent/mcp.json /tmp/pi-personal-user-mcp.json; fi"
 sprite exec -- bash -lc "if [ -d $REMOTE_AGENT/browser-profile ]; then rm -rf /tmp/pi-personal-browser-profile; cp -a $REMOTE_AGENT/browser-profile /tmp/pi-personal-browser-profile; fi"
 sprite exec -- bash -lc "if [ -f $REMOTE_AGENT/logins.md ]; then cp -a $REMOTE_AGENT/logins.md /tmp/pi-personal-logins.md; fi"
+sprite exec -- bash -lc "if [ -f $REMOTE_AGENT/memory/NOTES.md ]; then cp -a $REMOTE_AGENT/memory/NOTES.md /tmp/pi-personal-notes.md; fi"
+sprite exec -- bash -lc "if [ -f $REMOTE_AGENT/memory/HEARTBEAT-STATE.md ]; then cp -a $REMOTE_AGENT/memory/HEARTBEAT-STATE.md /tmp/pi-personal-heartbeat-state.md; fi"
 tar -czf - \
   --exclude .git \
   --exclude node_modules \
@@ -56,18 +58,24 @@ tar -czf - \
   --exclude agent/state \
   --exclude agent/browser-profile \
   --exclude agent/live-view.md \
+  --exclude agent/memory/NOTES.md \
+  --exclude agent/memory/HEARTBEAT-STATE.md \
   src package.json bun.lock tsconfig.json agent scripts README.md |
   sprite exec -- tar -xzf - -C "$REMOTE_APP"
 
 sprite exec -- bash -lc "rm -rf $REMOTE_AGENT && mkdir -p $REMOTE_AGENT && cp -R $REMOTE_APP/agent/. $REMOTE_AGENT/"
-sprite exec -- bash -lc "mkdir -p $REMOTE_AGENT/.pi /home/sprite/.pi/agent
+sprite exec -- bash -lc "mkdir -p $REMOTE_AGENT/.pi /home/sprite/.pi/agent $REMOTE_AGENT/memory
 if [ -f /tmp/pi-personal-mcp.json ]; then mv /tmp/pi-personal-mcp.json $REMOTE_AGENT/.pi/mcp.json; fi
 if [ -f /tmp/pi-personal-user-mcp.json ]; then mv /tmp/pi-personal-user-mcp.json /home/sprite/.pi/agent/mcp.json; fi
 has_mcp() { grep -Eq '\"(url|command)\"' \"\$1\" 2>/dev/null; }
 if has_mcp $REMOTE_AGENT/.pi/mcp.json && ! has_mcp /home/sprite/.pi/agent/mcp.json; then cp $REMOTE_AGENT/.pi/mcp.json /home/sprite/.pi/agent/mcp.json; fi
 if has_mcp /home/sprite/.pi/agent/mcp.json && ! has_mcp $REMOTE_AGENT/.pi/mcp.json; then cp /home/sprite/.pi/agent/mcp.json $REMOTE_AGENT/.pi/mcp.json; fi
 if [ -d /tmp/pi-personal-browser-profile ]; then rm -rf $REMOTE_AGENT/browser-profile; mv /tmp/pi-personal-browser-profile $REMOTE_AGENT/browser-profile; fi
-if [ ! -f $REMOTE_AGENT/logins.md ] && [ -f /tmp/pi-personal-logins.md ]; then mv /tmp/pi-personal-logins.md $REMOTE_AGENT/logins.md; fi"
+if [ ! -f $REMOTE_AGENT/logins.md ] && [ -f /tmp/pi-personal-logins.md ]; then mv /tmp/pi-personal-logins.md $REMOTE_AGENT/logins.md; fi
+if [ -f /tmp/pi-personal-notes.md ]; then mv /tmp/pi-personal-notes.md $REMOTE_AGENT/memory/NOTES.md
+elif [ ! -f $REMOTE_AGENT/memory/NOTES.md ] && [ -f $REMOTE_AGENT/memory/NOTES.md.example ]; then cp $REMOTE_AGENT/memory/NOTES.md.example $REMOTE_AGENT/memory/NOTES.md; fi
+if [ -f /tmp/pi-personal-heartbeat-state.md ]; then mv /tmp/pi-personal-heartbeat-state.md $REMOTE_AGENT/memory/HEARTBEAT-STATE.md
+elif [ ! -f $REMOTE_AGENT/memory/HEARTBEAT-STATE.md ] && [ -f $REMOTE_AGENT/memory/HEARTBEAT-STATE.md.example ]; then cp $REMOTE_AGENT/memory/HEARTBEAT-STATE.md.example $REMOTE_AGENT/memory/HEARTBEAT-STATE.md; fi"
 sprite exec -- bash -lc "cat > $REMOTE_APP/.env" < .env
 sprite exec -- bash -lc "grep -q AGENT_CWD= $REMOTE_APP/.env || echo AGENT_CWD=$REMOTE_AGENT >> $REMOTE_APP/.env"
 
