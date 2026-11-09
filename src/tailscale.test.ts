@@ -180,7 +180,7 @@ test("pickExitNode matches hostname or MagicDNS and requires an approved online 
   expect(() => pickExitNode(status, "other-mac")).toThrow(/No Tailscale peer matching/);
   expect(() => pickExitNode({ Peer: { n: { ...macPeer, Online: false } } }, "ryans-macbook")).toThrow(/offline/);
   expect(() => pickExitNode({ Peer: { n: { ...macPeer, ExitNodeOption: false } } }, "ryans-macbook")).toThrow(
-    /not an approved exit node/,
+    /Edit route settings/,
   );
 });
 

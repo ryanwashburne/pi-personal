@@ -219,7 +219,9 @@ export function pickExitNode(status: TailscaleNetStatus, wanted: string): { ip: 
   const name = match.HostName ?? wanted;
   if (!match.Online) throw new Error(`${name} is offline. Wake the Mac and keep Tailscale connected.`);
   if (!match.ExitNodeOption) {
-    throw new Error(`${name} is not an approved exit node. Enable it at https://login.tailscale.com/admin/machines`);
+    throw new Error(
+      `${name} is not an approved exit node. https://login.tailscale.com/admin/machines → this machine → Edit route settings → Use as exit node.`,
+    );
   }
   const ip = match.TailscaleIPs?.find((value) => value.startsWith("100.")) ?? match.TailscaleIPs?.[0];
   if (!ip) throw new Error(`${name} has no Tailscale IP.`);
