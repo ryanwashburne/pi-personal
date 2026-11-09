@@ -156,6 +156,24 @@ else
 fi
 echo
 
+echo "Enabling Sendblue auto typing (covers Sprite warm/cold wake before our process exists)..."
+if curl -sS -X POST "https://api.sendblue.com/accounts/settings/auto-typing-indicator" \
+  -H "sb-api-key-id: $SENDBLUE_API_KEY_ID" \
+  -H "sb-api-secret-key: $SENDBLUE_API_KEY_SECRET" \
+  -H "Content-Type: application/json" \
+  -d '{"auto_typing_indicator": true}' \
+  | python3 -c 'import json,sys
+try:
+    data = json.load(sys.stdin)
+except Exception:
+    sys.exit(1)
+sys.exit(0 if data.get("auto_typing_indicator") is True else 1)'; then
+  echo "Sendblue auto typing is on."
+else
+  echo "Warning: could not enable Sendblue auto typing. Inbound “…” during Sprite wake may be missing." >&2
+fi
+echo
+
 if [[ "${REGISTER_WEBHOOK:-}" == "1" ]]; then
   echo "Registering Sendblue receive webhook..."
   curl -sS -X POST "https://api.sendblue.com/api/account/webhooks" \

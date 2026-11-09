@@ -94,3 +94,13 @@ test("enableAutoTyping turns on Sendblue's inbound typing indicator", async () =
     },
   ]);
 });
+
+test("enableAutoTyping retries a cold-start network failure", async () => {
+  const { fetchFn, calls } = recordFetch((_call, n) =>
+    n === 1 ? new Error("timeout") : jsonResponse(200, { status: "OK", auto_typing_indicator: true }),
+  );
+  const client = createSendblueClient(config, fetchFn);
+  await client.enableAutoTyping?.();
+  expect(calls).toHaveLength(2);
+  expect(calls[1]?.url).toBe("https://api.sendblue.com/accounts/settings/auto-typing-indicator");
+});

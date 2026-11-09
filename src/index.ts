@@ -1,132 +1,87 @@
-import { join } from "node:path";
-import { attachVncWebSocket, toBuffer, vncProtocolHeaders, type VncProxy } from "./vnc-proxy";
-import { handleBrowserEnsure } from "./browser-ensure";
-import { createBrowserSession } from "./browser-session";
 import { loadConfig } from "./config";
-import { browserWsPath } from "./dashboard";
-import { HEARTBEAT_SESSION_ID } from "./heartbeat";
-import { createPiAgent, type PiAgent } from "./pi";
-import { internalListenPort } from "./playwright-mcp";
+import { createFetchHandler, type EarlyGateway } from "./early-typing";
 import { createSendblueClient } from "./sendblue";
-import { createTailscale } from "./tailscale";
-import { createFetchHandler, createGateway } from "./webhook";
-
-const proxies = new WeakMap<object, VncProxy>();
 
 const config = loadConfig();
-const internalPort = internalListenPort();
-process.env.INTERNAL_PORT = String(internalPort);
-const imessagePi = createPiAgent(config);
-const heartbeatPi = createPiAgent(config, { sessionId: HEARTBEAT_SESSION_ID, name: HEARTBEAT_SESSION_ID });
-const pi: PiAgent = {
-  prompt: (message) => imessagePi.prompt(message),
-  async restart() {
-    await imessagePi.restart();
-    await heartbeatPi.restart();
-  },
-  async stop() {
-    await imessagePi.stop();
-    await heartbeatPi.stop();
-  },
-};
-const tailscale = createTailscale({
-  stateDir: join(process.cwd(), "tailscale-state"),
-  authKey: config.tailscaleAuthKey,
-  exitNode: config.tailscaleExitNode,
-  socksPort: config.tailscaleSocksPort,
-});
-const browser = createBrowserSession({
-  agentCwd: config.agentCwd,
-  requireProxy: Boolean(config.tailscaleExitNode),
-  async ensureNetwork() {
-    await tailscale.start();
-    const status = tailscale.status();
-    return { proxyUrl: status.socksUrl, exitNode: status.exitNode };
-  },
-});
 const sendblue = createSendblueClient(config);
 void sendblue.enableAutoTyping?.().catch((error) => {
   console.warn("auto typing failed", error);
 });
-const gatewayPromise = createGateway({
+
+type WsSink = {
+  send: (data: string | Uint8Array) => void;
+  close: () => void;
+};
+
+type LoadedApp = {
+  gateway: EarlyGateway;
+  handleUpgrade: (
+    request: Request,
+    bunServer: { upgrade: (request: Request, options?: { headers?: HeadersInit }) => boolean },
+  ) => Promise<"upgraded" | Response | undefined>;
+  websocket: {
+    open: (ws: WsSink) => Promise<void>;
+    message: (ws: WsSink, message: string | Buffer | Uint8Array) => void;
+    close: (ws: WsSink) => void;
+  };
+  stop: () => Promise<void>;
+};
+
+let resolveApp: (app: LoadedApp) => void = () => {};
+const appPromise = new Promise<LoadedApp>((resolve) => {
+  resolveApp = resolve;
+});
+
+const handleHttp = createFetchHandler({
   config,
   sendblue,
-  pi,
-  heartbeatPi,
-  browser,
-  tailscale,
-});
-gatewayPromise.catch((error) => {
-  console.error("gateway init failed", error);
-  process.exit(1);
-});
-const handleHttp = createFetchHandler({ config, sendblue, gateway: gatewayPromise });
-const wsPath = browserWsPath(config);
-
-const internal = Bun.serve({
-  hostname: "127.0.0.1",
-  port: internalPort,
-  async fetch(request) {
-    const result = await handleBrowserEnsure(request, browser);
-    return new Response(result.body, { status: result.status, headers: result.headers });
-  },
+  gateway: appPromise.then((app) => app.gateway),
 });
 
 const server = Bun.serve({
   port: config.port,
   async fetch(request, bunServer) {
-    const url = new URL(request.url);
-    if (wsPath && url.pathname === wsPath) {
-      if (!browser.status().running) {
-        return new Response("browser is not running", { status: 503 });
-      }
-      const headers = vncProtocolHeaders(request);
-      if (bunServer.upgrade(request, headers ? { headers } : {})) return;
-      return new Response("upgrade failed", { status: 400 });
+    if (request.headers.get("upgrade")?.toLowerCase() === "websocket") {
+      const app = await appPromise;
+      const upgraded = await app.handleUpgrade(request, bunServer);
+      if (upgraded === "upgraded") return;
+      if (upgraded) return upgraded;
     }
-
     return handleHttp(request);
   },
   websocket: {
     idleTimeout: 600,
     async open(ws) {
-      try {
-        const proxy = await attachVncWebSocket(
-          {
-            send(data) {
-              ws.send(data instanceof Uint8Array ? data : new Uint8Array(toBuffer(data)));
-            },
-            close() {
-              ws.close();
-            },
-          },
-          browser.vncPort(),
-        );
-        proxies.set(ws, proxy);
-      } catch (error) {
-        console.warn("vnc proxy failed", error);
-        ws.close();
-      }
+      const app = await appPromise;
+      await app.websocket.open(ws);
     },
     message(ws, message) {
-      proxies.get(ws)?.write(toBuffer(message));
+      void appPromise.then((app) => app.websocket.message(ws, message));
     },
     close(ws) {
-      proxies.get(ws)?.end();
-      proxies.delete(ws);
+      void appPromise.then((app) => app.websocket.close(ws)).catch(() => undefined);
     },
   },
 });
 
-console.log(`pi-personal listening on :${server.port}; browser ensure on 127.0.0.1:${internal.port}`);
+console.log(`pi-personal listening on :${server.port}`);
+
+// Bind first, then load dashboard/MCP/Google. Sprite forwards the waking
+// webhook as soon as something listens; “…” can go out before those modules
+// finish evaluating.
+void import("./app")
+  .then((mod) => mod.startApp({ config, sendblue }))
+  .then((app) => resolveApp(app))
+  .catch((error) => {
+    console.error("gateway init failed", error);
+    process.exit(1);
+  });
 
 process.on("SIGTERM", () => {
   void (async () => {
-    await browser.stop();
-    await tailscale.stop();
-    await pi.stop();
+    const app = await appPromise.catch(() => undefined);
+    await app?.stop();
     server.stop();
-    internal.stop();
     process.exit(0);
   })();
 });
