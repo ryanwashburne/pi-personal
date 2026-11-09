@@ -9,7 +9,8 @@ This git repo is public. Secrets stay in gitignored files on the Mac and on the 
 ## Layout
 
 - `src/` — Bun webhook gateway, settings page, live-view Chromium
-- `agent/` — copied to `/home/sprite/agent`; Pi’s cwd on the Sprite (`SYSTEM.md`, notes, logins)
+- `agent/` — copied to `/home/sprite/agent`; Pi’s cwd on the Sprite (`SYSTEM.md`, notes, logins, `imessage.md`)
+- `agent/imessage.md` — what Messages actually renders in Pi’s reply bubble (markdown does not)
 - `scripts/provision.sh` — create/update the Sprite and copy `.env` + `agent/logins.md`
 
 ## Commands
