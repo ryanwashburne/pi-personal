@@ -79,6 +79,7 @@ async function setup() {
       async stop() {},
     },
     browser,
+    browserMcp: false,
     dedupe: await createDedupe(join(dir, "processed.json")),
     async hold() {
       return { async heartbeat() {}, async release() {} };
@@ -99,7 +100,7 @@ test("serves HTML at the unguessable settings path", async () => {
   expect(result.status).toBe(200);
   expect(result.headers?.["content-type"]).toContain("text/html");
   expect(result.body).toContain("Add HTTP MCP");
-  expect(result.body).toContain("None configured");
+  expect(result.body).toContain("Playwright is always on");
   expect(result.body).toContain("Open live view");
   expect(result.body).toContain("Paste (⌘V / Ctrl+V)");
   expect(result.body).toContain("stopped");
@@ -118,6 +119,7 @@ test("does not serve a dashboard when DASHBOARD_SECRET is unset", async () => {
     sendblue: { async sendTyping() {}, async sendMessage() {} },
     pi: { async prompt() { return ""; }, async restart() {}, async stop() {} },
     userMcpPath: join(dir, "missing-user-mcp.json"),
+    browserMcp: false,
     dedupe: await createDedupe(join(dir, "processed.json")),
     async hold() {
       return { async heartbeat() {}, async release() {} };
@@ -264,6 +266,7 @@ test("settings page shows Tailscale status and last error", async () => {
       async start() {},
       async stop() {},
     },
+    browserMcp: false,
     dedupe: await createDedupe(join(dir, "processed.json")),
     async hold() {
       return { async heartbeat() {}, async release() {} };
@@ -294,6 +297,7 @@ test("live view explains a crashed browser instead of a blank screen", async () 
     sendblue: { async sendTyping() {}, async sendMessage() {} },
     pi: { async prompt() { return ""; }, async restart() {}, async stop() {} },
     browser,
+    browserMcp: false,
     dedupe: await createDedupe(join(dir, "processed.json")),
     async hold() {
       return { async heartbeat() {}, async release() {} };
@@ -332,4 +336,58 @@ test("rejects a non-http MCP URL", async () => {
   expect(posted.status).toBe(303);
   expect(posted.headers?.Location).toContain("error=");
   expect(restarts).toHaveLength(0);
+});
+
+test("writes the built-in Playwright MCP server and hides remove", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "pi-dashboard-"));
+  const gateway = await createGateway({
+    config: { ...config, agentCwd: dir, mcpConfigPath: join(dir, "mcp.json"), userMcpPath: join(dir, "user-mcp.json") },
+    userMcpPath: join(dir, "user-mcp.json"),
+    sendblue: { async sendTyping() {}, async sendMessage() {} },
+    pi: { async prompt() { return ""; }, async restart() {}, async stop() {} },
+    browser: mockBrowser(dir),
+    dedupe: await createDedupe(join(dir, "processed.json")),
+    async hold() {
+      return { async heartbeat() {}, async release() {} };
+    },
+  });
+  const path = dashboardPath(config);
+  if (!path) throw new Error("dashboard path missing");
+  const page = await gateway.handle(dash(path));
+  expect(page.body).toContain(">playwright<");
+  expect(page.body).toContain("built-in");
+  expect(page.body).toContain("playwright-mcp.ts");
+  expect(page.body).not.toContain('name" value="playwright"');
+
+  const removed = await gateway.handle(
+    dash(path, {
+      method: "POST",
+      body: new URLSearchParams({ action: "remove", name: "playwright" }),
+    }),
+  );
+  expect(removed.headers?.Location).toContain("error=");
+  const listed = await listMcpServers(join(dir, "mcp.json"));
+  expect(listed).toHaveLength(1);
+  expect(listed[0]?.name).toBe("playwright");
+  expect(listed[0]?.kind).toBe("stdio");
+  expect(listed[0]?.target).toContain("playwright-mcp.ts");
+});
+
+test("rejects reserving the playwright MCP name for an HTTP server", async () => {
+  const { gateway, restarts, mcpPath } = await setup();
+  const path = dashboardPath(config);
+  if (!path) throw new Error("dashboard path missing");
+  const posted = await gateway.handle(
+    dash(path, {
+      method: "POST",
+      body: new URLSearchParams({
+        action: "add",
+        name: "playwright",
+        url: "https://example.com/mcp",
+      }),
+    }),
+  );
+  expect(posted.headers?.Location).toContain("error=");
+  expect(restarts).toHaveLength(0);
+  expect(await listMcpServers(mcpPath)).toEqual([]);
 });

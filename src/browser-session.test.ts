@@ -186,3 +186,32 @@ test("start launches a window manager when openbox is installed", async () => {
   ]);
   await session.stop();
 });
+
+test("agent start skips the Sprite hold; settings start can add it later", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "pi-browser-"));
+  let holds = 0;
+  let releases = 0;
+  const session = createBrowserSession({
+    agentCwd: dir,
+    which: (name) => (name === "Xvfb" || name === "x11vnc" || name === "chromium" ? `/usr/bin/${name}` : null),
+    spawn: () => fakeChild(),
+    waitForPort: async () => {},
+    readyDelayMs: 0,
+    async hold() {
+      holds += 1;
+      return {
+        async heartbeat() {},
+        async release() {
+          releases += 1;
+        },
+      };
+    },
+  });
+  await session.start({ hold: false });
+  expect(session.status().running).toBe(true);
+  expect(holds).toBe(0);
+  await session.start({ hold: true });
+  expect(holds).toBe(1);
+  await session.stop();
+  expect(releases).toBe(1);
+});

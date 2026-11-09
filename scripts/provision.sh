@@ -55,7 +55,7 @@ tar -czf - \
   --exclude agent/sessions \
   --exclude agent/state \
   --exclude agent/browser-profile \
-  src package.json tsconfig.json agent scripts README.md |
+  src package.json bun.lock tsconfig.json agent scripts README.md |
   sprite exec -- tar -xzf - -C "$REMOTE_APP"
 
 sprite exec -- bash -lc "rm -rf $REMOTE_AGENT && mkdir -p $REMOTE_AGENT && cp -R $REMOTE_APP/agent/. $REMOTE_AGENT/"
@@ -69,6 +69,9 @@ if [ -d /tmp/pi-personal-browser-profile ]; then rm -rf $REMOTE_AGENT/browser-pr
 if [ ! -f $REMOTE_AGENT/logins.md ] && [ -f /tmp/pi-personal-logins.md ]; then mv /tmp/pi-personal-logins.md $REMOTE_AGENT/logins.md; fi"
 sprite exec -- bash -lc "cat > $REMOTE_APP/.env" < .env
 sprite exec -- bash -lc "grep -q AGENT_CWD= $REMOTE_APP/.env || echo AGENT_CWD=$REMOTE_AGENT >> $REMOTE_APP/.env"
+
+echo "Installing gateway packages..."
+sprite exec -- bash -lc "cd $REMOTE_APP && bun install"
 
 echo "Installing browser packages if needed..."
 sprite exec -- bash "$REMOTE_APP/scripts/install-browser-deps.sh"

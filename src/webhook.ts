@@ -4,7 +4,13 @@ import type { TailscaleService } from "./tailscale";
 import { normalizePhone, type Config } from "./config";
 import { handleDashboard } from "./dashboard";
 import { createDedupe, type Dedupe } from "./dedupe";
-import { syncMcpConfigFiles } from "./mcp-config";
+import {
+  BROWSER_MCP_NAME,
+  mcpConfigPaths,
+  syncMcpConfigFiles,
+  upsertStdioMcpServers,
+} from "./mcp-config";
+import { defaultPlaywrightMcp } from "./playwright-mcp";
 import { promptFromInbound, parseInbound } from "./inbound";
 import type { PiAgent } from "./pi";
 import type { GatewayResult } from "./result";
@@ -28,17 +34,26 @@ type GatewayOptions = {
   dedupe?: Dedupe;
   hold?: () => Promise<Hold>;
   userMcpPath?: string;
+  browserMcp?: { command: string; args: string[] } | false;
 };
 
 export async function createGateway(options: GatewayOptions): Promise<Gateway> {
   const dedupe =
     options.dedupe ?? (await createDedupe(join(options.config.agentCwd, "state", "processed.json")));
-  await syncMcpConfigFiles(
-    options.config.mcpConfigPath,
-    options.userMcpPath ?? options.config.userMcpPath,
-  ).catch((error) => {
+  const userMcpPath = options.userMcpPath ?? options.config.userMcpPath;
+  await syncMcpConfigFiles(options.config.mcpConfigPath, userMcpPath).catch((error) => {
     console.warn("mcp config migrate failed", error);
   });
+  if (options.browserMcp !== false) {
+    const spec = options.browserMcp ?? defaultPlaywrightMcp();
+    await upsertStdioMcpServers(mcpConfigPaths(options.config.mcpConfigPath, userMcpPath), {
+      name: BROWSER_MCP_NAME,
+      command: spec.command,
+      args: spec.args,
+    }).catch((error) => {
+      console.warn("playwright mcp config failed", error);
+    });
+  }
   const inFlight = new Set<string>();
   const hold = options.hold ?? holdSprite;
 

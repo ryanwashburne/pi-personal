@@ -27,9 +27,13 @@ export type BrowserStatus = {
   proxy?: string;
 };
 
+export type BrowserStartOptions = {
+  hold?: boolean;
+};
+
 export type BrowserSession = {
   status: () => BrowserStatus;
-  start: () => Promise<void>;
+  start: (options?: BrowserStartOptions) => Promise<void>;
   stop: () => Promise<void>;
   vncPort: () => number;
 };
@@ -68,6 +72,7 @@ export function createBrowserSession(options: BrowserSessionOptions): BrowserSes
   let hold: Hold | undefined;
   let heartbeat: ReturnType<typeof setInterval> | undefined;
   let network: { proxyUrl?: string; exitNode?: string } = {};
+  let startChain = Promise.resolve();
 
   function resolveChrome(): string | undefined {
     return chromePath(which, [join(process.cwd(), "browser-bin"), join(options.agentCwd, "browser-bin")]);
@@ -92,8 +97,34 @@ export function createBrowserSession(options: BrowserSessionOptions): BrowserSes
     };
   }
 
-  async function start() {
-    if (running) return;
+  async function acquireHold() {
+    if (hold) return;
+    hold = await holdFn().catch((caught) => {
+      console.warn("browser task hold failed", caught);
+      return undefined;
+    });
+    if (!hold || heartbeat) return;
+    heartbeat = setInterval(() => {
+      void hold?.heartbeat().catch((caught) => console.warn("browser hold heartbeat failed", caught));
+    }, 60_000);
+    heartbeat.unref();
+  }
+
+  async function start(startOptions?: BrowserStartOptions) {
+    const run = startChain.then(() => startUnlocked(startOptions));
+    startChain = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    return run;
+  }
+
+  async function startUnlocked(startOptions?: BrowserStartOptions) {
+    const wantHold = startOptions?.hold !== false;
+    if (running) {
+      if (wantHold) await acquireHold();
+      return;
+    }
     const absent = missing();
     if (absent.length > 0) {
       const stub = stubChrome(which);
@@ -261,14 +292,7 @@ export function createBrowserSession(options: BrowserSessionOptions): BrowserSes
       throwIfDied();
 
       running = true;
-      hold = await holdFn().catch((caught) => {
-        console.warn("browser task hold failed", caught);
-        return undefined;
-      });
-      heartbeat = setInterval(() => {
-        void hold?.heartbeat().catch((caught) => console.warn("browser hold heartbeat failed", caught));
-      }, 60_000);
-      heartbeat.unref();
+      if (wantHold) await acquireHold();
     } catch (caught) {
       const fail = caught instanceof Error ? caught.message : String(caught);
       error = logs.length > 0 ? `${fail}\n${logs.join("").slice(-2000)}` : fail;

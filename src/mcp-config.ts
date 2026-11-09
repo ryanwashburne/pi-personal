@@ -13,11 +13,23 @@ export type ListedMcpServer = {
   hasAuth: boolean;
 };
 
+export const BROWSER_MCP_NAME = "playwright";
+
 export type AddHttpMcpServer = {
   name: string;
   url: string;
   bearerToken?: string;
 };
+
+export type AddStdioMcpServer = {
+  name: string;
+  command: string;
+  args?: string[];
+};
+
+export function isBuiltinMcpServer(name: string): boolean {
+  return name.trim() === BROWSER_MCP_NAME;
+}
 
 type McpFile = {
   mcpServers?: Record<string, unknown>;
@@ -88,6 +100,14 @@ export async function addHttpMcpServers(paths: string[], input: AddHttpMcpServer
   }
 }
 
+export async function upsertStdioMcpServers(paths: string[], input: AddStdioMcpServer): Promise<void> {
+  const unique = [...new Set(paths.filter((path) => path.trim().length > 0))];
+  if (unique.length === 0) throw new Error("No MCP config path to write.");
+  for (const path of unique) {
+    await upsertStdioMcpServer(path, input);
+  }
+}
+
 export async function removeMcpServers(paths: string[], name: string): Promise<boolean> {
   const unique = [...new Set(paths.filter((path) => path.trim().length > 0))];
   const results = await Promise.all(unique.map((path) => removeMcpServer(path, name)));
@@ -128,6 +148,9 @@ export async function listMcpServers(path: string): Promise<ListedMcpServer[]> {
 export async function addHttpMcpServer(path: string, input: AddHttpMcpServer): Promise<void> {
   const nameError = validateMcpName(input.name);
   if (nameError) throw new Error(nameError);
+  if (isBuiltinMcpServer(input.name)) {
+    throw new Error(`Name ${BROWSER_MCP_NAME} is reserved for Sprite Chromium.`);
+  }
   const urlError = validateMcpUrl(input.url);
   if (urlError) throw new Error(urlError);
 
@@ -161,7 +184,33 @@ export async function addHttpMcpServer(path: string, input: AddHttpMcpServer): P
   await writeMcpFile(path, { ...file, mcpServers: servers });
 }
 
+export async function upsertStdioMcpServer(path: string, input: AddStdioMcpServer): Promise<void> {
+  const nameError = validateMcpName(input.name);
+  if (nameError) throw new Error(nameError);
+
+  const file = await readMcpFile(path);
+  const servers = { ...(file.mcpServers ?? {}) };
+  const existing =
+    servers[input.name.trim()] && typeof servers[input.name.trim()] === "object"
+      ? (servers[input.name.trim()] as Record<string, unknown>)
+      : {};
+
+  const next: Record<string, unknown> = {
+    ...existing,
+    command: input.command,
+    args: input.args ?? [],
+    exposure: "direct",
+  };
+  delete next.url;
+  delete next.headers;
+  delete next.type;
+
+  servers[input.name.trim()] = next;
+  await writeMcpFile(path, { ...file, mcpServers: servers });
+}
+
 export async function removeMcpServer(path: string, name: string): Promise<boolean> {
+  if (isBuiltinMcpServer(name)) return false;
   const file = await readMcpFile(path);
   const servers = { ...(file.mcpServers ?? {}) };
   if (!(name in servers)) return false;
