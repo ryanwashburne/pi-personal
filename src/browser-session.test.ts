@@ -1,9 +1,10 @@
 import { expect, test } from "bun:test";
 import type { ChildProcess } from "node:child_process";
+import { writeFileSync } from "node:fs";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createBrowserSession } from "./browser-session";
+import { createBrowserSession, isSnapStub } from "./browser-session";
 
 function fakeChild(): ChildProcess {
   const child = {
@@ -39,7 +40,7 @@ test("start launches Xvfb, x11vnc, and chromium with a persistent profile", asyn
   const launched: Array<{ cmd: string; args: string[] }> = [];
   const session = createBrowserSession({
     agentCwd: dir,
-    which: (name) => `/usr/bin/${name}`,
+    which: (name) => (name === "Xvfb" || name === "x11vnc" || name === "chromium" ? `/usr/bin/${name}` : null),
     spawn: (cmd, args) => {
       launched.push({ cmd, args: [...args] });
       return fakeChild();
@@ -62,4 +63,67 @@ test("start launches Xvfb, x11vnc, and chromium with a persistent profile", asyn
 
   await session.stop();
   expect(session.status().running).toBe(false);
+});
+
+test("isSnapStub detects Ubuntu's chromium-browser wrapper", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "pi-browser-"));
+  const stub = join(dir, "chromium-browser");
+  writeFileSync(
+    stub,
+    "#!/bin/sh\necho \"Command '$0' requires the chromium snap to be installed.\"\necho snap install chromium\nexit 1\n",
+  );
+  expect(isSnapStub(stub)).toBe(true);
+  expect(isSnapStub("/opt/google/chrome/chrome")).toBe(false);
+
+  const session = createBrowserSession({
+    agentCwd: dir,
+    which: (name) => {
+      if (name === "Xvfb" || name === "x11vnc") return `/usr/bin/${name}`;
+      if (name === "chromium" || name === "chromium-browser") return stub;
+      return null;
+    },
+    spawn: () => fakeChild(),
+    waitForPort: async () => {},
+    async hold() {
+      return { async heartbeat() {}, async release() {} };
+    },
+  });
+  expect(session.status().missing).toEqual(["chromium"]);
+  await expect(session.start()).rejects.toThrow(/snap wrapper/);
+});
+
+test("a failed start keeps the chromium error, not Xvfb SIGTERM", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "pi-browser-"));
+  const listeners: Array<(code: number | null) => void> = [];
+  function childWithExit(): ChildProcess {
+    const child = {
+      pid: 7,
+      exitCode: null as number | null,
+      stdout: { setEncoding() {}, on() {} },
+      stderr: { setEncoding() {}, on() {} },
+      on(_event: string, fn: (code: number | null) => void) {
+        listeners.push(fn);
+      },
+      kill() {
+        child.exitCode = 0;
+        for (const fn of listeners) fn(0);
+      },
+    };
+    return child as unknown as ChildProcess;
+  }
+
+  const session = createBrowserSession({
+    agentCwd: dir,
+    which: (name) => (name === "Xvfb" || name === "x11vnc" || name === "chromium" ? `/usr/bin/${name}` : null),
+    spawn: () => childWithExit(),
+    waitForPort: async (port) => {
+      if (port === 9222) throw new Error("timed out waiting for 127.0.0.1:9222");
+    },
+    readyDelayMs: 0,
+    async hold() {
+      return { async heartbeat() {}, async release() {} };
+    },
+  });
+  await expect(session.start()).rejects.toThrow("timed out waiting for 127.0.0.1:9222");
+  expect(session.status().error ?? "").not.toMatch(/^Xvfb exited/);
 });

@@ -1,14 +1,14 @@
 import { spawn, type ChildProcess } from "node:child_process";
-import { mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync } from "node:fs";
 import { createConnection } from "node:net";
 import { join } from "node:path";
 import { holdSprite, type Hold } from "./tasks";
 
 const CHROME_NAMES = [
+  "google-chrome-stable",
+  "google-chrome",
   "chromium",
   "chromium-browser",
-  "google-chrome",
-  "google-chrome-stable",
   "chrome",
 ];
 
@@ -64,11 +64,15 @@ export function createBrowserSession(options: BrowserSessionOptions): BrowserSes
   let hold: Hold | undefined;
   let heartbeat: ReturnType<typeof setInterval> | undefined;
 
+  function resolveChrome(): string | undefined {
+    return chromePath(which, [join(process.cwd(), "browser-bin"), join(options.agentCwd, "browser-bin")]);
+  }
+
   function missing(): string[] {
     const needed: string[] = [];
     if (!which("Xvfb")) needed.push("Xvfb");
     if (!which("x11vnc")) needed.push("x11vnc");
-    if (!chromePath(which)) needed.push("chromium");
+    if (!resolveChrome()) needed.push("chromium");
     return needed;
   }
 
@@ -85,7 +89,11 @@ export function createBrowserSession(options: BrowserSessionOptions): BrowserSes
     if (running) return;
     const absent = missing();
     if (absent.length > 0) {
+      const stub = stubChrome(which);
       error = `Missing ${absent.join(", ")}. Re-run ./scripts/provision.sh on the Sprite.`;
+      if (stub) {
+        error = `${error} ${stub} is Ubuntu's snap wrapper, not a real browser.`;
+      }
       throw new Error(error);
     }
 
@@ -145,11 +153,8 @@ export function createBrowserSession(options: BrowserSessionOptions): BrowserSes
       await waitForPort(BROWSER_VNC_PORT, 8_000);
       throwIfDied();
 
-      const chrome = chromePath(which);
+      const chrome = resolveChrome();
       if (!chrome) throw new Error("chromium disappeared after the dependency check.");
-      if (chrome.includes("/snap/")) {
-        throw new Error("Snap Chromium cannot run under Xvfb. Install the apt package: sudo apt-get install -y chromium");
-      }
       children.push(
         watchExit(
           track(
@@ -187,7 +192,14 @@ export function createBrowserSession(options: BrowserSessionOptions): BrowserSes
           "chromium",
         ),
       );
-      await waitForPort(BROWSER_CDP_PORT, 15_000);
+      await delay(options.readyDelayMs ?? 400);
+      throwIfDied();
+      try {
+        await waitForPort(BROWSER_CDP_PORT, 15_000);
+      } catch (caught) {
+        throwIfDied();
+        throw caught;
+      }
       throwIfDied();
 
       running = true;
@@ -200,11 +212,13 @@ export function createBrowserSession(options: BrowserSessionOptions): BrowserSes
       }, 60_000);
       heartbeat.unref();
     } catch (caught) {
-      error = caught instanceof Error ? caught.message : String(caught);
-      if (logs.length > 0) error = `${error}\n${logs.join("").slice(-2000)}`;
+      const fail = caught instanceof Error ? caught.message : String(caught);
+      error = logs.length > 0 ? `${fail}\n${logs.join("").slice(-2000)}` : fail;
+      stopping = true;
       await stopChildren(children);
       children.length = 0;
       running = false;
+      stopping = false;
       throw new Error(error);
     }
   }
@@ -248,10 +262,57 @@ export function createBrowserSession(options: BrowserSessionOptions): BrowserSes
   };
 }
 
-function chromePath(which: WhichFn): string | undefined {
+function stubChrome(which: WhichFn): string | undefined {
   for (const name of CHROME_NAMES) {
     const path = which(name);
-    if (path) return path;
+    if (path && isSnapStub(path)) return path;
+  }
+  return undefined;
+}
+
+function chromePath(which: WhichFn, searchRoots: string[]): string | undefined {
+  const fromEnv = process.env.CHROME_BIN;
+  if (fromEnv && existsSync(fromEnv) && !isSnapStub(fromEnv)) return fromEnv;
+  for (const name of CHROME_NAMES) {
+    const path = which(name);
+    if (path && !isSnapStub(path)) return path;
+  }
+  for (const root of searchRoots) {
+    const found = findNamedExecutable(root, ["chrome", "google-chrome", "chromium"]);
+    if (found && !isSnapStub(found)) return found;
+  }
+  return undefined;
+}
+
+export function isSnapStub(path: string): boolean {
+  if (path.includes("/snap/")) return true;
+  try {
+    const buf = readFileSync(path).subarray(0, 4096);
+    if (buf.length >= 4 && buf[0] === 0x7f && buf[1] === 0x45 && buf[2] === 0x4c && buf[3] === 0x46) {
+      return false;
+    }
+    return /requires the chromium snap|snap install chromium/i.test(buf.toString("utf8"));
+  } catch {
+    return false;
+  }
+}
+
+function findNamedExecutable(root: string, names: string[], depth = 0): string | undefined {
+  if (depth > 6 || !existsSync(root)) return undefined;
+  let entries;
+  try {
+    entries = readdirSync(root, { withFileTypes: true });
+  } catch {
+    return undefined;
+  }
+  for (const entry of entries) {
+    const path = join(root, entry.name);
+    if (entry.isFile() && names.includes(entry.name)) return path;
+  }
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const found = findNamedExecutable(join(root, entry.name), names, depth + 1);
+    if (found) return found;
   }
   return undefined;
 }
