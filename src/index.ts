@@ -8,7 +8,7 @@ import { createPiAgent } from "./pi";
 import { internalListenPort } from "./playwright-mcp";
 import { createSendblueClient } from "./sendblue";
 import { createTailscale } from "./tailscale";
-import { createGateway } from "./webhook";
+import { createFetchHandler, createGateway } from "./webhook";
 
 const proxies = new WeakMap<object, VncProxy>();
 
@@ -31,13 +31,22 @@ const browser = createBrowserSession({
     return { proxyUrl: status.socksUrl, exitNode: status.exitNode };
   },
 });
-const gateway = await createGateway({
+const sendblue = createSendblueClient(config);
+void sendblue.enableAutoTyping?.().catch((error) => {
+  console.warn("auto typing failed", error);
+});
+const gatewayPromise = createGateway({
   config,
-  sendblue: createSendblueClient(config),
+  sendblue,
   pi,
   browser,
   tailscale,
 });
+gatewayPromise.catch((error) => {
+  console.error("gateway init failed", error);
+  process.exit(1);
+});
+const handleHttp = createFetchHandler({ config, sendblue, gateway: gatewayPromise });
 const wsPath = browserWsPath(config);
 
 const internal = Bun.serve({
@@ -62,21 +71,7 @@ const server = Bun.serve({
       return new Response("upgrade failed", { status: 400 });
     }
 
-    const result = await gateway.handle(request);
-    const summary = result.headers?.["content-type"]?.includes("text/html")
-      ? `html ${result.body.length}b`
-      : result.body;
-    console.log(`${request.method} ${url.pathname} -> ${result.status} ${summary}`);
-    // Await the turn while the webhook connection is still open. That HTTP
-    // activity is what keeps a Sprite from sleeping; a background promise does not.
-    if (result.work) {
-      try {
-        await result.work();
-      } catch (error) {
-        console.error("agent work failed", error);
-      }
-    }
-    return new Response(result.body, { status: result.status, headers: result.headers });
+    return handleHttp(request);
   },
   websocket: {
     idleTimeout: 600,

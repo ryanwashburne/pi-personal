@@ -27,6 +27,9 @@ export type Gateway = {
   handle: (request: Request) => Promise<GatewayResult>;
 };
 
+/** Refresh iMessage “…” before Sendblue’s default 60s typing window expires. */
+export const TYPING_PULSE_MS = 45_000;
+
 type GatewayOptions = {
   config: Config;
   sendblue: SendblueClient;
@@ -37,6 +40,7 @@ type GatewayOptions = {
   hold?: () => Promise<Hold>;
   userMcpPath?: string;
   browserMcp?: { command: string; args: string[] } | false;
+  typingPulseMs?: number;
 };
 
 export async function createGateway(options: GatewayOptions): Promise<Gateway> {
@@ -63,6 +67,7 @@ export async function createGateway(options: GatewayOptions): Promise<Gateway> {
   );
   const inFlight = new Set<string>();
   const hold = options.hold ?? holdSprite;
+  const typingPulseMs = options.typingPulseMs ?? TYPING_PULSE_MS;
   syncLiveViewFile(options.config);
 
   return {
@@ -82,11 +87,7 @@ export async function createGateway(options: GatewayOptions): Promise<Gateway> {
         return { status: 404, body: "not found" };
       }
 
-      const provided =
-        headerValue(request.headers, "sb-signing-secret") ??
-        headerValue(request.headers, "x-sb-signing-secret") ??
-        headerValue(request.headers, "x-webhook-secret");
-      if (!secretsEqual(provided, options.config.sendblueWebhookSecret)) {
+      if (!webhookSecretOk(request, options.config.sendblueWebhookSecret)) {
         const headerNames = [...request.headers.keys()].join(",");
         console.warn(`unauthorized webhook; headers=${headerNames || "(none)"}`);
         return { status: 401, body: "unauthorized" };
@@ -114,6 +115,7 @@ export async function createGateway(options: GatewayOptions): Promise<Gateway> {
         return { status: 200, body: "duplicate" };
       }
       inFlight.add(inbound.messageHandle);
+      startTyping(options.sendblue, from);
 
       return {
         status: 200,
@@ -124,10 +126,11 @@ export async function createGateway(options: GatewayOptions): Promise<Gateway> {
             console.warn("task hold failed", error);
             return { async heartbeat() {}, async release() {} };
           });
+          const pulse =
+            typingPulseMs > 0
+              ? setInterval(() => startTyping(options.sendblue, from), typingPulseMs)
+              : undefined;
           try {
-            void options.sendblue.sendTyping(from).catch((error) => {
-              console.warn("typing failed", error);
-            });
             console.log(`prompt ${inbound.messageHandle}`);
             const live = syncLiveViewFile(options.config, request.headers);
             const result = await options.pi.prompt(
@@ -156,6 +159,7 @@ export async function createGateway(options: GatewayOptions): Promise<Gateway> {
               .sendMessage(from, "I hit an error working on that. Try me again in a minute.")
               .catch((sendError) => console.error("error reply failed", sendError));
           } finally {
+            if (pulse) clearInterval(pulse);
             inFlight.delete(inbound.messageHandle);
             const task = await taskP;
             await task.release().catch((error) => console.warn("task release failed", error));
@@ -168,4 +172,81 @@ export async function createGateway(options: GatewayOptions): Promise<Gateway> {
 
 export function webhookPath(config: Pick<Config, "webhookPathSecret">): string {
   return `/webhooks/sendblue/${config.webhookPathSecret}`;
+}
+
+/**
+ * Fire iMessage “…” as soon as a waking webhook lands, without waiting for
+ * gateway init (MCP sync, Google, Playwright). Safe to call on a cloned Request.
+ */
+export async function startTypingFromRequest(
+  request: Request,
+  config: Config,
+  sendblue: SendblueClient,
+): Promise<boolean> {
+  if (request.method !== "POST") return false;
+  if (new URL(request.url).pathname !== webhookPath(config)) return false;
+  if (!webhookSecretOk(request, config.sendblueWebhookSecret)) return false;
+
+  let payload: unknown;
+  try {
+    payload = await request.json();
+  } catch {
+    return false;
+  }
+
+  const inbound = parseInbound(payload);
+  if (!inbound) return false;
+  const from = normalizePhone(inbound.fromNumber);
+  if (from !== config.allowedPhone) return false;
+  await sendblue.sendTyping(from);
+  return true;
+}
+
+export function createFetchHandler(options: {
+  config: Config;
+  sendblue: SendblueClient;
+  gateway: Promise<Gateway>;
+}): (request: Request) => Promise<Response> {
+  return async (request) => {
+    const url = new URL(request.url);
+    if (request.method === "GET" && url.pathname === "/health") {
+      return new Response("ok", { status: 200 });
+    }
+    if (request.method === "POST" && url.pathname === webhookPath(options.config)) {
+      void startTypingFromRequest(request.clone(), options.config, options.sendblue).catch((error) => {
+        console.warn("early typing failed", error);
+      });
+    }
+
+    const gateway = await options.gateway;
+    const result = await gateway.handle(request);
+    const summary = result.headers?.["content-type"]?.includes("text/html")
+      ? `html ${result.body.length}b`
+      : result.body;
+    console.log(`${request.method} ${url.pathname} -> ${result.status} ${summary}`);
+    // Await the turn while the webhook connection is still open. That HTTP
+    // activity is what keeps a Sprite from sleeping; a background promise does not.
+    if (result.work) {
+      try {
+        await result.work();
+      } catch (error) {
+        console.error("agent work failed", error);
+      }
+    }
+    return new Response(result.body, { status: result.status, headers: result.headers });
+  };
+}
+
+function webhookSecretOk(request: Request, secret: string): boolean {
+  const provided =
+    headerValue(request.headers, "sb-signing-secret") ??
+    headerValue(request.headers, "x-sb-signing-secret") ??
+    headerValue(request.headers, "x-webhook-secret");
+  return secretsEqual(provided, secret);
+}
+
+function startTyping(sendblue: SendblueClient, to: string): void {
+  void sendblue.sendTyping(to).catch((error) => {
+    console.warn("typing failed", error);
+  });
 }
