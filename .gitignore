@@ -15,6 +15,7 @@ agent/sessions/
 agent/state/
 agent/browser-profile/
 browser-bin/
+tailscale-state/
 /.pi/
 
 # deps and junk

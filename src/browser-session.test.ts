@@ -66,6 +66,33 @@ test("start launches Xvfb, x11vnc, and chromium with a persistent profile", asyn
   expect(session.status().running).toBe(false);
 });
 
+test("start points Chromium at a Tailscale SOCKS proxy", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "pi-browser-"));
+  const launched: Array<{ cmd: string; args: string[] }> = [];
+  const session = createBrowserSession({
+    agentCwd: dir,
+    which: (name) => (name === "Xvfb" || name === "x11vnc" || name === "chromium" ? `/usr/bin/${name}` : null),
+    spawn: (cmd, args) => {
+      launched.push({ cmd, args: [...args] });
+      return fakeChild();
+    },
+    waitForPort: async () => {},
+    readyDelayMs: 0,
+    async ensureNetwork() {
+      return { proxyUrl: "socks5://127.0.0.1:1055", exitNode: "ryans-macbook" };
+    },
+    async hold() {
+      return { async heartbeat() {}, async release() {} };
+    },
+  });
+  await session.start();
+  const chrome = launched.find((entry) => entry.cmd.endsWith("chromium"));
+  expect(chrome?.args).toContain("--proxy-server=socks5://127.0.0.1:1055");
+  expect(chrome?.args).toContain("--proxy-bypass-list=<-loopback>");
+  expect(session.status().exitNode).toBe("ryans-macbook");
+  await session.stop();
+});
+
 test("isSnapStub detects Ubuntu's chromium-browser wrapper", async () => {
   const dir = await mkdtemp(join(tmpdir(), "pi-browser-"));
   const stub = join(dir, "chromium-browser");

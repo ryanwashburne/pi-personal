@@ -37,6 +37,14 @@ That creates Sprite `pi-personal`, copies this repo onto it, installs `gateway` 
 
 The Sprite already hosts HTTP on port 8080. The settings page is the same public `*.sprites.app` URL, at `/settings/$DASHBOARD_SECRET`. Open it in a browser to add an HTTP MCP server (your URL, optional bearer token) and to start the Sprite Chromium. **Open live view** streams that browser so you can log into sites yourself — never text passwords. Cookies stay in `agent/browser-profile/` across sleeps. Do not share that link; it is the only auth on the page. The webhook path stays separate so Sendblue never sees the dashboard secret.
 
+To make Sprite Chrome look like your house IP, run a Tailscale **exit node** at home. Start on the MacBook; later point the same env at the rpi.
+
+```bash
+./scripts/setup-macos-exit-node.sh
+```
+
+That script advertises the Mac as an exit node and prints the `TAILSCALE_AUTHKEY` / `TAILSCALE_EXIT_NODE` values to put in `.env`. Re-run `./scripts/provision.sh`. Only Chromium uses the SOCKS proxy — Sendblue and the live-view URL stay on Fly. When the rpi is ready, advertise it as an exit node, set `TAILSCALE_EXIT_NODE` to the rpi name, provision again. The Mac (or rpi) must stay on while Chrome needs the home IP.
+
 Pi always reads `~/.pi/agent/mcp.json`. With `--approve` it also reads `.pi/mcp.json` in the agent workspace. The settings page writes **both**, with `exposure: "direct"` so tools are declared to the model as `mcp__<name>__<tool>`. An empty `mcpServers` object means no MCP tools yet — paste a URL on the page, then send a new text. The settings page also runs `pi mcp list` so you can see connect errors instead of an empty tool list.
 
 First-time Pi login on the Sprite:
@@ -66,7 +74,8 @@ The gateway can also run on your laptop (`bun start`) with the same `.env` if yo
 
 - `src/` — webhook gateway (Bun), including the settings live-view browser
 - `agent/` — Pi working tree (`SYSTEM.md`, notes). Copied to `/home/sprite/agent` on the Sprite
-- `scripts/provision.sh` — create/update the Sprite; installs Google Chrome, Xvfb, and x11vnc if missing (ignores Ubuntu’s snap stub)
+- `scripts/provision.sh` — create/update the Sprite; installs Google Chrome, Xvfb, x11vnc, and Tailscale if missing
+- `scripts/setup-macos-exit-node.sh` — run on the MacBook to advertise a Tailscale exit node
 - `.env.example` — names of required secrets, no real values
 
 ## What must not be committed

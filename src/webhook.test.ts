@@ -23,6 +23,9 @@ const config: Config = {
   agentTimeoutMs: 1000,
   piProvider: undefined,
   piModel: undefined,
+  tailscaleAuthKey: undefined,
+  tailscaleExitNode: undefined,
+  tailscaleSocksPort: 1055,
 };
 
 async function setup() {

@@ -18,6 +18,9 @@ export type Config = {
   agentTimeoutMs: number;
   piProvider: string | undefined;
   piModel: string | undefined;
+  tailscaleAuthKey: string | undefined;
+  tailscaleExitNode: string | undefined;
+  tailscaleSocksPort: number;
 };
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
@@ -51,6 +54,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     agentTimeoutMs: Number(env.AGENT_TIMEOUT_MS ?? 600_000),
     piProvider: emptyToUndefined(env.PI_PROVIDER),
     piModel: emptyToUndefined(env.PI_MODEL),
+    tailscaleAuthKey: emptyToUndefined(env.TAILSCALE_AUTHKEY),
+    tailscaleExitNode: emptyToUndefined(env.TAILSCALE_EXIT_NODE),
+    tailscaleSocksPort: Number(env.TAILSCALE_SOCKS_PORT ?? 1055),
   };
 }
 

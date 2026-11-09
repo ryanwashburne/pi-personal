@@ -307,11 +307,18 @@ function browserSection(config: Config, browser: BrowserStatus): string {
       : "";
   return `
     <h2>Browser</h2>
-    <p class="lede">One Chromium on this Sprite. Log in on the live view — never text passwords. Cookies stay in <code>browser-profile</code> across sleeps.</p>
+    <p class="lede">One Chromium on this Sprite. Log in on the live view — never text passwords. Cookies stay in <code>browser-profile</code> across sleeps. Optional Tailscale exit node (MacBook now, rpi later) makes sites see your home IP.</p>
     <table>
       <tr><th>Status</th><td>${escapeHtml(state)}</td></tr>
       <tr><th>Profile</th><td><code>${escapeHtml(browser.profileDir)}</code></td></tr>
       <tr><th>CDP</th><td><code>127.0.0.1:${BROWSER_CDP_PORT}</code> while running</td></tr>
+      <tr><th>Exit node</th><td>${
+        browser.exitNode
+          ? `<code>${escapeHtml(browser.exitNode)}</code>${browser.proxy ? ` via <code>${escapeHtml(browser.proxy)}</code>` : ""}`
+          : config.tailscaleExitNode
+            ? `<code>${escapeHtml(config.tailscaleExitNode)}</code> (start the browser to connect)`
+            : "Sprite / Fly IP (set TAILSCALE_EXIT_NODE to use the MacBook or rpi)"
+      }</td></tr>
     </table>
     ${missing}
     ${browser.error && !browser.running ? `<pre class="status">${escapeHtml(browser.error)}</pre>` : ""}
