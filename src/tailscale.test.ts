@@ -69,6 +69,45 @@ test("start launches userspace tailscaled and up with the exit node", async () =
   expect(launched[0].args).toContain("--socks5-server=127.0.0.1:1055");
   expect(launched[1].args).toContain("--exit-node=ryans-macbook");
   expect(launched[1].args).toContain("--accept-dns=false");
+  expect(launched[1].args.some((arg) => arg === "--reset")).toBe(false);
   await session.stop();
   expect(session.status().running).toBe(false);
+});
+
+test("a failed up includes tailscale stderr", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "pi-ts-"));
+  const session = createTailscale({
+    stateDir: dir,
+    authKey: "tskey-auth-test",
+    exitNode: "missing-node",
+    spawn: (_cmd, args) => {
+      if (!args.includes("up")) return fakeChild();
+      const exitListeners: Array<(code: number | null) => void> = [];
+      const child = {
+        pid: 3,
+        exitCode: null as number | null,
+        stdout: { setEncoding() {}, on() {} },
+        stderr: {
+          setEncoding() {},
+          on(event: string, fn: (chunk: string) => void) {
+            if (event === "data") {
+              queueMicrotask(() => {
+                fn("no node named missing-node\n");
+                child.exitCode = 1;
+                for (const listener of exitListeners) listener(1);
+              });
+            }
+          },
+        },
+        on(event: string, fn: (code: number | null) => void) {
+          if (event === "exit") exitListeners.push(fn);
+        },
+        kill() {},
+      };
+      return child as unknown as ChildProcess;
+    },
+    which: (name) => `/usr/sbin/${name}`,
+    waitForPort: async () => {},
+  });
+  await expect(session.start()).rejects.toThrow(/no node named missing-node/);
 });
