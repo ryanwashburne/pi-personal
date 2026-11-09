@@ -40,7 +40,7 @@ function tokenResponse(overrides: Record<string, unknown> = {}): Response {
   );
 }
 
-test("authorize URL asks for offline access, PKCE, and Workspace scopes", async () => {
+test("authorize URL asks for offline access, PKCE, and Gmail/Calendar/Drive scopes", async () => {
   const oauth = await client();
   const started = await startGoogleOAuth(oauth, "https://abc.sprites.app/settings/dash/google/callback");
   const url = new URL(started.authorizeUrl);
@@ -55,9 +55,7 @@ test("authorize URL asks for offline access, PKCE, and Workspace scopes", async 
   expect(url.searchParams.get("scope")).toContain("calendar.events");
   expect(url.searchParams.get("scope")).toContain("calendar.readonly");
   expect(url.searchParams.get("scope")).toContain("drive.file");
-  expect(url.searchParams.get("scope")).toContain("chat.messages.readonly");
-  expect(url.searchParams.get("scope")).toContain("chat.spaces.readonly");
-  expect(url.searchParams.get("scope")).toContain("chat.memberships.readonly");
+  expect(url.searchParams.get("scope")).not.toContain("chat.");
   const pending = JSON.parse(await readFile(join(oauth.dir, "google-oauth-pending.json"), "utf8")) as {
     state: string;
   };

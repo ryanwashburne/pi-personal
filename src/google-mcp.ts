@@ -2,9 +2,10 @@ import { join } from "node:path";
 import type { Config } from "./config";
 import {
   GOOGLE_MCP_NAMES,
-  addHttpMcpServer,
   mcpConfigPaths,
   removeMcpServer,
+  upsertStdioMcpServer,
+  type AddStdioMcpServer,
   type GoogleMcpName,
 } from "./mcp-config";
 import {
@@ -14,33 +15,15 @@ import {
   googleOAuthConnected,
   type GoogleOAuthClient,
 } from "./google-oauth";
+import { GOOGLE_MCP_INSTRUCTIONS } from "./google-rest";
 
 export const GOOGLE_MCP_SERVERS: ReadonlyArray<{
   name: GoogleMcpName;
-  url: string;
   description: string;
-}> = [
-  {
-    name: "gmail",
-    url: "https://gmailmcp.googleapis.com/mcp/v1",
-    description: "Gmail: search, read, label, and draft mail. Cannot send.",
-  },
-  {
-    name: "calendar",
-    url: "https://calendarmcp.googleapis.com/mcp/v1",
-    description: "Google Calendar: list, search, create, update, and delete events.",
-  },
-  {
-    name: "drive",
-    url: "https://drivemcp.googleapis.com/mcp/v1",
-    description: "Google Drive: search, read, create, and copy files.",
-  },
-  {
-    name: "search",
-    url: "https://workspacemcp.googleapis.com/mcp/v1",
-    description: "Universal Search: one query across Gmail, Calendar, Drive, and Chat.",
-  },
-];
+}> = GOOGLE_MCP_NAMES.map((name) => ({
+  name,
+  description: GOOGLE_MCP_INSTRUCTIONS[name],
+}));
 
 export function googleTokenPathFor(config: Pick<Config, "googleOAuthTokenPath">): string {
   return config.googleOAuthTokenPath?.trim() || defaultGoogleTokenPath();
@@ -61,8 +44,16 @@ export function googleOAuthClientFromConfig(
   };
 }
 
-export function googleAuthorizationCommand(scriptDir = import.meta.dir): string {
-  return `${shellArg(process.execPath)} ${shellArg(join(scriptDir, "google-access-token.ts"))}`;
+export function defaultGoogleMcp(
+  service: GoogleMcpName,
+  scriptDir = import.meta.dir,
+): AddStdioMcpServer {
+  return {
+    name: service,
+    command: process.execPath,
+    args: [join(scriptDir, "google-rest-mcp.ts"), service],
+    description: GOOGLE_MCP_INSTRUCTIONS[service],
+  };
 }
 
 export async function googleWorkspaceStatus(
@@ -78,28 +69,24 @@ export async function googleWorkspaceStatus(
 export async function syncGoogleWorkspaceMcp(
   config: Pick<Config, "mcpConfigPath" | "userMcpPath" | "googleOAuthClientId" | "googleOAuthClientSecret" | "googleOAuthTokenPath">,
   paths = mcpConfigPaths(config.mcpConfigPath, config.userMcpPath),
-  authorizationCommand = googleAuthorizationCommand(),
 ): Promise<boolean> {
   const status = await googleWorkspaceStatus(config);
   if (status.connected) {
-    await upsertGoogleMcpServers(paths, authorizationCommand);
+    await upsertGoogleMcpServers(paths);
     return true;
   }
   await removeGoogleMcpServers(paths);
   return false;
 }
 
-export async function upsertGoogleMcpServers(paths: string[], authorizationCommand: string): Promise<void> {
+export async function upsertGoogleMcpServers(
+  paths: string[],
+  scriptDir = import.meta.dir,
+): Promise<void> {
   const unique = uniquePaths(paths);
   for (const path of unique) {
-    for (const server of GOOGLE_MCP_SERVERS) {
-      await addHttpMcpServer(path, {
-        name: server.name,
-        url: server.url,
-        description: server.description,
-        authorizationCommand,
-        allowReserved: true,
-      });
+    for (const name of GOOGLE_MCP_NAMES) {
+      await upsertStdioMcpServer(path, defaultGoogleMcp(name, scriptDir));
     }
   }
 }
@@ -117,8 +104,4 @@ export async function removeGoogleMcpServers(paths: string[]): Promise<boolean> 
 
 function uniquePaths(paths: string[]): string[] {
   return [...new Set(paths.filter((path) => path.trim().length > 0))];
-}
-
-function shellArg(value: string): string {
-  return `'${value.replaceAll("'", `'\\''`)}'`;
 }

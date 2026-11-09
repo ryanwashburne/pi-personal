@@ -30,6 +30,7 @@ export type AddStdioMcpServer = {
   name: string;
   command: string;
   args?: string[];
+  description?: string;
 };
 
 export function isBuiltinMcpServer(name: string): boolean {
@@ -225,6 +226,9 @@ export async function upsertStdioMcpServer(path: string, input: AddStdioMcpServe
   delete next.headers;
   delete next.type;
 
+  const description = input.description?.trim();
+  if (description) next.description = description;
+
   servers[input.name.trim()] = next;
   await writeMcpFile(path, { ...file, mcpServers: servers });
 }
@@ -260,7 +264,7 @@ export function reservedMcpNameError(name: string): string {
     return `Name ${BROWSER_MCP_NAME} is reserved for Sprite Chromium.`;
   }
   if (isGoogleMcpServer(name)) {
-    return "gmail, calendar, drive, and search are reserved for Google Workspace. Connect them on this page.";
+    return "gmail, calendar, drive, and search are reserved for Google. Connect them on this page.";
   }
   return `Name ${name.trim()} is reserved.`;
 }
