@@ -1,5 +1,5 @@
 import { spawn, type ChildProcess } from "node:child_process";
-import { existsSync, mkdirSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createConnection } from "node:net";
 import { join } from "node:path";
 import { holdSprite, type Hold } from "./tasks";
@@ -126,6 +126,32 @@ export function createBrowserSession(options: BrowserSessionOptions): BrowserSes
       );
       await delay(options.readyDelayMs ?? 400);
 
+      const displayEnv = {
+        ...process.env,
+        DISPLAY: BROWSER_DISPLAY,
+        XDG_RUNTIME_DIR: process.env.XDG_RUNTIME_DIR || "/tmp",
+        LIBGL_ALWAYS_SOFTWARE: "1",
+      };
+
+      const xsetroot = which("xsetroot");
+      if (xsetroot) {
+        track(
+          spawnChild(xsetroot, ["-solid", "#5b87b0"], { stdio: ["ignore", "pipe", "pipe"], env: displayEnv }),
+          logs,
+        );
+      }
+
+      const wm = which("openbox") || which("fluxbox") || which("matchbox-window-manager");
+      if (wm) {
+        children.push(
+          watchExit(
+            track(spawnChild(wm, [], { stdio: ["ignore", "pipe", "pipe"], env: displayEnv }), logs),
+            "window-manager",
+          ),
+        );
+        await delay(options.readyDelayMs ?? 400);
+      }
+
       children.push(
         watchExit(
           track(
@@ -142,8 +168,10 @@ export function createBrowserSession(options: BrowserSessionOptions): BrowserSes
                 "-shared",
                 "-repeat",
                 "-noxdamage",
+                "-cursor",
+                "arrow",
               ],
-              { stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, DISPLAY: BROWSER_DISPLAY } },
+              { stdio: ["ignore", "pipe", "pipe"], env: displayEnv },
             ),
             logs,
           ),
@@ -155,6 +183,15 @@ export function createBrowserSession(options: BrowserSessionOptions): BrowserSes
 
       const chrome = resolveChrome();
       if (!chrome) throw new Error("chromium disappeared after the dependency check.");
+      const homePage = join(profileDir, "home.html");
+      writeFileSync(
+        homePage,
+        `<!doctype html><meta charset="utf-8"><title>Sprite browser</title>
+<body style="margin:0;font:20px/1.4 system-ui,sans-serif;background:#dce6f2;color:#123;padding:48px">
+<h1>Sprite Chromium</h1>
+<p>This is the browser on the Sprite. Type a URL in the address bar and log in here.</p>
+</body>`,
+      );
       children.push(
         watchExit(
           track(
@@ -167,22 +204,24 @@ export function createBrowserSession(options: BrowserSessionOptions): BrowserSes
                 `--remote-debugging-port=${BROWSER_CDP_PORT}`,
                 "--remote-debugging-address=127.0.0.1",
                 "--ozone-platform=x11",
+                "--use-gl=angle",
+                "--use-angle=swiftshader",
+                "--enable-unsafe-swiftshader",
                 "--no-sandbox",
                 "--disable-setuid-sandbox",
                 "--test-type",
                 "--disable-dev-shm-usage",
-                "--disable-gpu",
+                "--start-maximized",
                 "--no-first-run",
                 "--no-default-browser-check",
                 "--password-store=basic",
                 "--hide-crash-restore-bubble",
-                "about:blank",
+                `file://${homePage}`,
               ],
               {
                 stdio: ["ignore", "pipe", "pipe"],
                 env: {
-                  ...process.env,
-                  DISPLAY: BROWSER_DISPLAY,
+                  ...displayEnv,
                   DBUS_SESSION_BUS_ADDRESS: "unix:path=/dev/null",
                 },
               },

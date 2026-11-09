@@ -349,13 +349,14 @@ function viewerPage(
   <title>Sprite browser</title>
   <style>
     :root { color-scheme: dark; }
-    html, body { margin: 0; height: 100%; background: #111; color: #eee; font: 15px/1.4 system-ui, sans-serif; }
-    header { display: flex; gap: 0.75rem; align-items: center; padding: 0.5rem 0.8rem; border-bottom: 1px solid #333; }
+    html, body { margin: 0; height: 100%; background: #111; color: #eee; font: 15px/1.4 system-ui, sans-serif; display: flex; flex-direction: column; }
+    header { display: flex; gap: 0.75rem; align-items: center; padding: 0.5rem 0.8rem; border-bottom: 1px solid #333; flex: 0 0 auto; }
     header a, header button { color: inherit; font: inherit; }
-    #screen { height: calc(100% - 3rem); background: #000; }
+    #screen { flex: 1; min-height: 0; position: relative; background: #1a3048; }
+    #status { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; padding: 1rem; text-align: center; }
     .msg { padding: 1rem; max-width: 48rem; }
     pre.status { white-space: pre-wrap; font-size: 0.82rem; padding: 0.7rem; border: 1px solid #444; overflow: auto; }
-    .flash { padding: 0.5rem 0.8rem; border: 1px solid #555; }
+    .flash { padding: 0.5rem 0.8rem; border: 1px solid #555; flex: 0 0 auto; }
     .bad { border-color: #a11; }
     .ok { border-color: #1f7a3a; }
     form { display: inline; }
@@ -380,19 +381,25 @@ function viewerPage(
   ${flashError ? `<p class="flash bad">${escapeHtml(flashError)}</p>` : ""}
   ${
     browser.running
-      ? `<div id="screen"></div>
+      ? `<div id="screen"><p id="status">Connecting to Sprite display…</p></div>
   <script type="module">
-    import RFB from "https://cdn.jsdelivr.net/npm/@novnc/novnc@1.5.0/lib/rfb.js";
-    const proto = location.protocol === "https:" ? "wss:" : "ws:";
-    const rfb = new RFB(document.getElementById("screen"), proto + "//" + location.host + ${JSON.stringify(wsPath)});
-    rfb.scaleViewport = true;
-    rfb.clipViewport = true;
-    rfb.addEventListener("disconnect", () => {
-      const msg = document.createElement("p");
-      msg.className = "msg";
-      msg.textContent = "Disconnected. Start the browser again if the Sprite slept.";
-      document.body.appendChild(msg);
-    });
+    const status = document.getElementById("status");
+    try {
+      const { default: RFB } = await import("https://cdn.jsdelivr.net/npm/@novnc/novnc@1.5.0/lib/rfb.js");
+      const proto = location.protocol === "https:" ? "wss:" : "ws:";
+      const rfb = new RFB(document.getElementById("screen"), proto + "//" + location.host + ${JSON.stringify(wsPath)}, { wsProtocols: ["binary"] });
+      rfb.scaleViewport = true;
+      rfb.clipViewport = false;
+      rfb.addEventListener("connect", () => { if (status) status.textContent = ""; });
+      rfb.addEventListener("disconnect", (event) => {
+        if (!status) return;
+        status.textContent = event.detail?.clean
+          ? "Disconnected. Start the browser again if the Sprite slept."
+          : "Could not connect to the Sprite display. Try Start again.";
+      });
+    } catch (err) {
+      if (status) status.textContent = "Could not load the VNC viewer: " + err;
+    }
   </script>`
       : `<div class="msg">${empty}</div>`
   }

@@ -51,6 +51,15 @@ export function attachVncWebSocket(ws: VncWebSocket, port: number): Promise<VncP
   });
 }
 
+export function vncProtocolHeaders(request: Request): Record<string, string> | undefined {
+  const raw = request.headers.get("sec-websocket-protocol");
+  if (!raw) return undefined;
+  const offered = raw.split(",").map((part) => part.trim().toLowerCase());
+  const picked = offered.find((part) => part === "binary") ?? offered.find((part) => part === "base64");
+  if (!picked) return undefined;
+  return { "Sec-WebSocket-Protocol": picked };
+}
+
 export function toBuffer(data: string | Buffer | ArrayBuffer | Uint8Array): Buffer {
   if (typeof data === "string") return Buffer.from(data);
   if (Buffer.isBuffer(data)) return data;

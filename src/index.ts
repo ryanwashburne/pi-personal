@@ -1,4 +1,4 @@
-import { attachVncWebSocket, toBuffer, type VncProxy } from "./vnc-proxy";
+import { attachVncWebSocket, toBuffer, vncProtocolHeaders, type VncProxy } from "./vnc-proxy";
 import { createBrowserSession } from "./browser-session";
 import { loadConfig } from "./config";
 import { browserWsPath } from "./dashboard";
@@ -27,7 +27,8 @@ const server = Bun.serve({
       if (!browser.status().running) {
         return new Response("browser is not running", { status: 503 });
       }
-      if (bunServer.upgrade(request)) return;
+      const headers = vncProtocolHeaders(request);
+      if (bunServer.upgrade(request, headers ? { headers } : {})) return;
       return new Response("upgrade failed", { status: 400 });
     }
 
@@ -54,7 +55,7 @@ const server = Bun.serve({
         const proxy = await attachVncWebSocket(
           {
             send(data) {
-              ws.send(data);
+              ws.send(data instanceof Uint8Array ? data : new Uint8Array(toBuffer(data)));
             },
             close() {
               ws.close();

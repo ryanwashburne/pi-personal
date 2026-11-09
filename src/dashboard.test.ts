@@ -220,6 +220,8 @@ test("starts the Sprite browser from the settings form", async () => {
   expect(viewer.status).toBe(200);
   expect(viewer.body).toContain("streaming");
   expect(viewer.body).toContain(`${viewerPath}/ws`);
+  expect(viewer.body).toContain("Connecting to Sprite display");
+  expect(viewer.body).toContain('wsProtocols: ["binary"]');
   expect(viewer.body).not.toContain("nothing to stream");
 });
 
