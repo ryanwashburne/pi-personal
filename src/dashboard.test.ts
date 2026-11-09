@@ -220,6 +220,37 @@ test("starts the Sprite browser from the settings form", async () => {
   expect(viewer.status).toBe(200);
   expect(viewer.body).toContain("streaming");
   expect(viewer.body).toContain(`${viewerPath}/ws`);
+  expect(viewer.body).not.toContain("nothing to stream");
+});
+
+test("live view explains a crashed browser instead of a blank screen", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "pi-dashboard-"));
+  const browser = mockBrowser(dir);
+  browser.status = () => ({
+    running: false,
+    profileDir: join(dir, "browser-profile"),
+    missing: [],
+    error: "chromium exited (code=1)\nMissing X server",
+  });
+  const gateway = await createGateway({
+    config: { ...config, agentCwd: dir, mcpConfigPath: join(dir, "mcp.json"), userMcpPath: join(dir, "user-mcp.json") },
+    userMcpPath: join(dir, "missing-user-mcp.json"),
+    sendblue: { async sendTyping() {}, async sendMessage() {} },
+    pi: { async prompt() { return ""; }, async restart() {}, async stop() {} },
+    browser,
+    dedupe: await createDedupe(join(dir, "processed.json")),
+    async hold() {
+      return { async heartbeat() {}, async release() {} };
+    },
+  });
+  const viewerPath = browserViewerPath(config);
+  if (!viewerPath) throw new Error("viewer path missing");
+  const viewer = await gateway.handle(
+    dash(`${viewerPath}?notice=${encodeURIComponent("Browser is running.")}`),
+  );
+  expect(viewer.body).toContain("nothing to stream");
+  expect(viewer.body).toContain("chromium exited (code=1)");
+  expect(viewer.body).not.toContain("Browser is running.");
 });
 
 test("404s a guessed browser viewer path", async () => {

@@ -314,6 +314,7 @@ function browserSection(config: Config, browser: BrowserStatus): string {
       <tr><th>CDP</th><td><code>127.0.0.1:${BROWSER_CDP_PORT}</code> while running</td></tr>
     </table>
     ${missing}
+    ${browser.error && !browser.running ? `<pre class="status">${escapeHtml(browser.error)}</pre>` : ""}
     <p>
       <form class="row-form" method="post">
         <input type="hidden" name="action" value="browser-start">
@@ -335,6 +336,11 @@ function viewerPage(
   error: string | null,
 ): string {
   const wsPath = `${path}/browser/ws`;
+  const flashNotice = browser.running ? notice : null;
+  const flashError = error || (!browser.running ? browser.error : undefined);
+  const empty = browser.error
+    ? `Chromium did not stay running, so there is nothing to stream yet. The black area is not the browser — it is this page waiting. Start again after fixing:<pre class="status">${escapeHtml(browser.error)}</pre>`
+    : "This page is the live view. Click Start and the Sprite Chromium will appear here so you can log in. Right now it is stopped, so you are only seeing this message.";
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -347,7 +353,8 @@ function viewerPage(
     header { display: flex; gap: 0.75rem; align-items: center; padding: 0.5rem 0.8rem; border-bottom: 1px solid #333; }
     header a, header button { color: inherit; font: inherit; }
     #screen { height: calc(100% - 3rem); background: #000; }
-    .msg { padding: 1rem; }
+    .msg { padding: 1rem; max-width: 48rem; }
+    pre.status { white-space: pre-wrap; font-size: 0.82rem; padding: 0.7rem; border: 1px solid #444; overflow: auto; }
     .flash { padding: 0.5rem 0.8rem; border: 1px solid #555; }
     .bad { border-color: #a11; }
     .ok { border-color: #1f7a3a; }
@@ -369,8 +376,8 @@ function viewerPage(
     </form>
     <span>${browser.running ? "streaming" : "stopped"}</span>
   </header>
-  ${notice ? `<p class="flash ok">${escapeHtml(notice)}</p>` : ""}
-  ${error ? `<p class="flash bad">${escapeHtml(error)}</p>` : ""}
+  ${flashNotice ? `<p class="flash ok">${escapeHtml(flashNotice)}</p>` : ""}
+  ${flashError ? `<p class="flash bad">${escapeHtml(flashError)}</p>` : ""}
   ${
     browser.running
       ? `<div id="screen"></div>
@@ -387,7 +394,7 @@ function viewerPage(
       document.body.appendChild(msg);
     });
   </script>`
-      : `<p class="msg">Browser is stopped. Start it, then this page will stream the Sprite Chromium so you can log in.</p>`
+      : `<div class="msg">${empty}</div>`
   }
 </body>
 </html>`;
