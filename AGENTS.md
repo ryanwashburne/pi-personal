@@ -11,6 +11,7 @@ This git repo is public. Secrets stay in gitignored files on the Mac and on the 
 - `src/` — Bun webhook gateway, settings page, live-view Chromium
 - `agent/` — copied to `/home/sprite/agent`; Pi’s cwd on the Sprite (`SYSTEM.md`, notes, logins)
 - `scripts/provision.sh` — create/update the Sprite and copy `.env` + `agent/logins.md`
+- `scripts/setup-macos-exit-node.sh` / `scripts/setup-rpi-exit-node.sh` — advertise a home Tailscale exit node (agent stays on the Sprite)
 
 ## Commands
 
