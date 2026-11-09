@@ -21,6 +21,19 @@ function fakeChild(exitImmediately?: number): ChildProcess {
   return child as unknown as ChildProcess;
 }
 
+test("stop is safe when tailscaled never started", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "pi-ts-"));
+  const session = createTailscale({
+    stateDir: dir,
+    spawn: () => fakeChild(),
+    which: () => "/usr/sbin/tailscaled",
+    waitForPort: async () => {},
+  });
+  await session.stop();
+  await session.stop();
+  expect(session.status().running).toBe(false);
+});
+
 test("start is a no-op without Tailscale env", async () => {
   const dir = await mkdtemp(join(tmpdir(), "pi-ts-"));
   const session = createTailscale({

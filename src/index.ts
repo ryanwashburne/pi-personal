@@ -32,6 +32,7 @@ const gateway = await createGateway({
   sendblue: createSendblueClient(config),
   pi,
   browser,
+  tailscale,
 });
 const wsPath = browserWsPath(config);
 

@@ -216,7 +216,9 @@ test("starts the Sprite browser from the settings form", async () => {
 
   const page = await gateway.handle(dash(path));
   expect(page.body).toContain("running");
-  expect(page.body).toContain("Sprite / Fly IP");
+  expect(page.body).toContain("Tailscale");
+  expect(page.body).toContain("missing — set TAILSCALE_AUTHKEY");
+  expect(page.body).toContain("see Tailscale below");
 
   const viewerPath = browserViewerPath(config);
   if (!viewerPath) throw new Error("viewer path missing");
@@ -229,6 +231,47 @@ test("starts the Sprite browser from the settings form", async () => {
   expect(viewer.body).toContain('wsProtocols: ["binary"]');
   expect(viewer.body).not.toContain("/lib/rfb.js");
   expect(viewer.body).not.toContain("nothing to stream");
+});
+
+test("settings page shows Tailscale status and last error", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "pi-dashboard-"));
+  const gateway = await createGateway({
+    config: {
+      ...config,
+      agentCwd: dir,
+      mcpConfigPath: join(dir, "mcp.json"),
+      userMcpPath: join(dir, "user-mcp.json"),
+      tailscaleAuthKey: "tskey-auth-test",
+      tailscaleExitNode: "ryans-macbook",
+    },
+    userMcpPath: join(dir, "missing-user-mcp.json"),
+    sendblue: { async sendTyping() {}, async sendMessage() {} },
+    pi: { async prompt() { return ""; }, async restart() {}, async stop() {} },
+    browser: mockBrowser(dir),
+    tailscale: {
+      status: () => ({
+        configured: true,
+        running: false,
+        hasAuthKey: true,
+        exitNode: "ryans-macbook",
+        error: "tailscale up failed (code=1)\nbad exit node",
+      }),
+      async start() {},
+      async stop() {},
+    },
+    dedupe: await createDedupe(join(dir, "processed.json")),
+    async hold() {
+      return { async heartbeat() {}, async release() {} };
+    },
+  });
+  const path = dashboardPath(config);
+  if (!path) throw new Error("dashboard path missing");
+  const page = await gateway.handle(dash(path));
+  expect(page.body).toContain("ryans-macbook");
+  expect(page.body).toContain("Auth key");
+  expect(page.body).toContain(">set<");
+  expect(page.body).toContain("bad exit node");
+  expect(page.body).not.toContain("tskey-auth-test");
 });
 
 test("live view explains a crashed browser instead of a blank screen", async () => {
