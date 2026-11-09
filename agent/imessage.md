@@ -17,4 +17,4 @@ The gateway sends the final assistant text as Sendblue `content`. It lands in Me
 
 If you must share a command or snippet, paste it as plain text with a blank line around it.
 
-This path cannot attach media, App Cards, or iMessage screen/bubble effects. A public URL is how to share something visual (Messages may unfurl it).
+This path cannot attach media, App Cards, or iMessage screen/bubble effects. A public URL is how to share something visual (Messages may unfurl it). The shared Chrome live view URL belongs on its own line so Messages makes it tappable.

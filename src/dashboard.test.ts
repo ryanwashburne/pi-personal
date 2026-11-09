@@ -1,10 +1,12 @@
 import { expect, test } from "bun:test";
 import { mkdtemp } from "node:fs/promises";
+import { readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { BrowserSession } from "./browser-session";
 import type { Config } from "./config";
 import { browserViewerPath, dashboardPath } from "./dashboard";
+import { liveViewFilePath } from "./live-view";
 import { createDedupe } from "./dedupe";
 import { listMcpServers } from "./mcp-config";
 import { createGateway } from "./webhook";
@@ -13,6 +15,7 @@ const config: Config = {
   port: 8080,
   webhookPathSecret: "path-secret",
   dashboardPathSecret: "dash-secret",
+  spriteUrl: undefined,
   sendblueApiKeyId: "id",
   sendblueApiKeySecret: "secret",
   sendblueFromNumber: "+15551111111",
@@ -85,7 +88,7 @@ async function setup() {
       return { async heartbeat() {}, async release() {} };
     },
   });
-  return { gateway, restarts, browser, mcpPath: join(dir, "mcp.json"), userPath: join(dir, "user-mcp.json") };
+  return { gateway, restarts, browser, dir, mcpPath: join(dir, "mcp.json"), userPath: join(dir, "user-mcp.json") };
 }
 
 function dash(path: string, init?: RequestInit) {
@@ -93,10 +96,15 @@ function dash(path: string, init?: RequestInit) {
 }
 
 test("serves HTML at the unguessable settings path", async () => {
-  const { gateway } = await setup();
+  const { gateway, dir } = await setup();
   const path = dashboardPath(config);
   if (!path) throw new Error("dashboard path missing");
-  const result = await gateway.handle(dash(path));
+  const result = await gateway.handle(
+    dash(path, { headers: { "x-forwarded-host": "abc.sprites.app", "x-forwarded-proto": "https" } }),
+  );
+  expect(readFileSync(liveViewFilePath(dir), "utf8")).toContain(
+    "https://abc.sprites.app/settings/dash-secret/browser",
+  );
   expect(result.status).toBe(200);
   expect(result.headers?.["content-type"]).toContain("text/html");
   expect(result.body).toContain("Add HTTP MCP");

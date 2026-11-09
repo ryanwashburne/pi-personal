@@ -36,7 +36,9 @@ Fill `.env` (this file is gitignored):
 
 That creates Sprite `pi-personal`, copies this repo onto it, installs `gateway` as the HTTP service, and prints the public webhook URL and settings page. Re-run with `REGISTER_WEBHOOK=1` to append that URL on your Sendblue account, or paste it in the Sendblue dashboard yourself.
 
-The Sprite already hosts HTTP on port 8080. The settings page is the same public `*.sprites.app` URL, at `/settings/$DASHBOARD_SECRET`. Open it in a browser to add an extra HTTP MCP server (your URL, optional bearer token) and to watch Sprite Chromium. Pi starts that Chromium itself when a text needs the web; Playwright MCP then drives it (`mcp__playwright__*`). **Open live view** streams the same window so you can watch or log into sites yourself — never text passwords. ⌘V / Ctrl+V (or the Paste button) types into that Chrome. Cookies stay in `agent/browser-profile/` across sleeps. Do not share that link; it is the only auth on the page. The webhook path stays separate so Sendblue never sees the dashboard secret.
+The Sprite already hosts HTTP on port 8080. The settings page is the same public `*.sprites.app` URL, at `/settings/$DASHBOARD_SECRET`. Open it in a browser to add an extra HTTP MCP server (your URL, optional bearer token) and to watch Sprite Chromium. Pi starts that Chromium itself when a text needs the web; Playwright MCP then drives it (`mcp__playwright__*`). **Open live view** (`/settings/$DASHBOARD_SECRET/browser`) streams the same window so you can watch or log into sites yourself — never text passwords. ⌘V / Ctrl+V (or the Paste button) types into that Chrome. Cookies stay in `agent/browser-profile/` across sleeps. Do not share that link; it is the only auth on the page. The webhook path stays separate so Sendblue never sees the dashboard secret.
+
+`provision.sh` writes `SPRITE_URL` into `.env`. The gateway copies the live-view URL into gitignored `agent/live-view.md` and prefixes it on each Pi prompt, so when Chrome needs you, Pi can iMessage that link as a bare URL.
 
 To make Sprite Chrome look like your house IP, run a Tailscale **exit node** at home. Start on the MacBook; later point the same env at the rpi.
 
@@ -74,7 +76,7 @@ The gateway can also run on your laptop (`bun start`) with the same `.env` if yo
 ## Layout
 
 - `src/` — webhook gateway (Bun), including the settings live-view browser
-- `agent/` — Pi working tree (`SYSTEM.md`, notes). Copied to `/home/sprite/agent` on the Sprite
+- `agent/` — Pi working tree (`SYSTEM.md`, notes, `chrome.md`). Copied to `/home/sprite/agent` on the Sprite
 - `scripts/provision.sh` — create/update the Sprite; installs Google Chrome, Xvfb, x11vnc, and Tailscale if missing
 - `scripts/setup-macos-exit-node.sh` — run on the MacBook to advertise a Tailscale exit node
 - `AGENTS.md` — instructions for coding agents
@@ -87,6 +89,7 @@ The gateway can also run on your laptop (`bun start`) with the same `.env` if yo
 - `agent/sessions/` and `agent/state/` (conversation history)
 - `agent/browser-profile/` (Chromium logins and cookies)
 - `agent/logins.md` (site usernames and passwords)
+- `agent/live-view.md` (public live-view URL; embeds `DASHBOARD_SECRET`)
 - Pi `auth.json` / provider credentials
 
 Access control for the live agent is the unguessable webhook path, the Sendblue signing secret, the phone allowlist in `.env`, and the unguessable settings path (that same path is the only lock on the streamed browser). Sendblue keys stay in the gateway. Pi does not get a “text anyone” tool.

@@ -1,0 +1,7 @@
+# Live view
+
+This file is written by the gateway on the Sprite. Copy is not enough — do not commit a real `live-view.md`.
+
+When the owner must interact with the shared Chrome, text this URL on its own line:
+
+https://example.sprites.app/settings/replace-with-dashboard-secret/browser

@@ -28,3 +28,17 @@ test("Pi workspace documents iMessage-safe replies", () => {
   expect(imessage).toMatch(/data detectors/i);
   expect(imessage).toMatch(/Does not render/i);
 });
+
+test("Pi workspace documents shared Chrome and the live view URL", () => {
+  const agentDir = join(import.meta.dir, "../agent");
+  const system = readFileSync(join(agentDir, "SYSTEM.md"), "utf8");
+  const agents = readFileSync(join(agentDir, "AGENTS.md"), "utf8");
+  const chrome = readFileSync(join(agentDir, "chrome.md"), "utf8");
+
+  expect(system).toContain("chrome.md");
+  expect(system).toContain("live-view.md");
+  expect(agents).toContain("chrome.md");
+  expect(agents).toContain("live-view.md");
+  expect(chrome).toMatch(/live view URL/i);
+  expect(chrome).toContain("live-view.md");
+});

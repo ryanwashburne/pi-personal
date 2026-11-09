@@ -1,15 +1,18 @@
 import { expect, test } from "bun:test";
 import { mkdtemp } from "node:fs/promises";
+import { readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Config } from "./config";
 import { createDedupe } from "./dedupe";
+import { liveViewFilePath, liveViewPromptNote } from "./live-view";
 import { createGateway, webhookPath } from "./webhook";
 
 const config: Config = {
   port: 8080,
   webhookPathSecret: "path-secret",
   dashboardPathSecret: undefined,
+  spriteUrl: undefined,
   sendblueApiKeyId: "id",
   sendblueApiKeySecret: "secret",
   sendblueFromNumber: "+15551111111",
@@ -28,7 +31,7 @@ const config: Config = {
   tailscaleSocksPort: 1055,
 };
 
-async function setup() {
+async function setup(overrides: Partial<Config> = {}) {
   const dir = await mkdtemp(join(tmpdir(), "pi-personal-"));
   const sent: string[] = [];
   const prompts: string[] = [];
@@ -38,6 +41,7 @@ async function setup() {
       agentCwd: dir,
       mcpConfigPath: join(dir, ".pi/mcp.json"),
       userMcpPath: join(dir, "missing-user-mcp.json"),
+      ...overrides,
     },
     sendblue: {
       async sendTyping() {},
@@ -59,7 +63,7 @@ async function setup() {
       return { async heartbeat() {}, async release() {} };
     },
   });
-  return { gateway, sent, prompts };
+  return { gateway, sent, prompts, dir };
 }
 
 function post(body: unknown, headers: Record<string, string> = {}) {
@@ -109,6 +113,41 @@ test("acks then replies to an allowlisted inbound text", async () => {
   await result.work?.();
   expect(prompts).toEqual(["what's up"]);
   expect(sent).toEqual(["got it"]);
+});
+
+test("prefixes the live view URL when Sprite origin is known", async () => {
+  const liveViewUrl = "https://abc.sprites.app/settings/dash-secret/browser";
+  const { gateway, prompts, dir } = await setup({
+    dashboardPathSecret: "dash-secret",
+    spriteUrl: "https://abc.sprites.app",
+  });
+  const result = await gateway.handle(
+    post({
+      from_number: "+15552222222",
+      message_handle: "msg-live",
+      content: "what's up",
+    }),
+  );
+  await result.work?.();
+  expect(prompts).toEqual([`${liveViewPromptNote(liveViewUrl)}\n\nwhat's up`]);
+  expect(readFileSync(liveViewFilePath(dir), "utf8")).toContain(liveViewUrl);
+});
+
+test("learns sprites.app origin from forwarded host", async () => {
+  const liveViewUrl = "https://learned.sprites.app/settings/dash-secret/browser";
+  const { gateway, prompts } = await setup({ dashboardPathSecret: "dash-secret" });
+  const result = await gateway.handle(
+    post(
+      {
+        from_number: "+15552222222",
+        message_handle: "msg-host",
+        content: "login help",
+      },
+      { "x-forwarded-host": "learned.sprites.app", "x-forwarded-proto": "https" },
+    ),
+  );
+  await result.work?.();
+  expect(prompts).toEqual([`${liveViewPromptNote(liveViewUrl)}\n\nlogin help`]);
 });
 
 test("dedupes the same message handle", async () => {

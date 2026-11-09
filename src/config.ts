@@ -5,6 +5,7 @@ export type Config = {
   port: number;
   webhookPathSecret: string;
   dashboardPathSecret: string | undefined;
+  spriteUrl: string | undefined;
   sendblueApiKeyId: string;
   sendblueApiKeySecret: string;
   sendblueFromNumber: string;
@@ -40,6 +41,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     port: Number(env.PORT ?? 8080),
     webhookPathSecret: requiredFrom(env, "WEBHOOK_PATH_SECRET"),
     dashboardPathSecret: emptyToUndefined(env.DASHBOARD_SECRET),
+    spriteUrl: emptyToUndefined(env.SPRITE_URL)?.replace(/\/+$/, ""),
     sendblueApiKeyId: requiredFrom(env, "SENDBLUE_API_KEY_ID"),
     sendblueApiKeySecret: requiredFrom(env, "SENDBLUE_API_KEY_SECRET"),
     sendblueFromNumber: normalizePhone(requiredFrom(env, "SENDBLUE_FROM_NUMBER")) ??

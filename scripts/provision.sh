@@ -55,6 +55,7 @@ tar -czf - \
   --exclude agent/sessions \
   --exclude agent/state \
   --exclude agent/browser-profile \
+  --exclude agent/live-view.md \
   src package.json bun.lock tsconfig.json agent scripts README.md |
   sprite exec -- tar -xzf - -C "$REMOTE_APP"
 
@@ -79,14 +80,6 @@ sprite exec -- bash "$REMOTE_APP/scripts/install-browser-deps.sh"
 echo "Installing Tailscale client if needed..."
 sprite exec -- bash "$REMOTE_APP/scripts/install-tailscale.sh"
 
-echo "Installing gateway as a Sprite service..."
-sprite exec -- bash -lc "sprite-env services get gateway >/dev/null 2>&1 && sprite-env services delete gateway || true"
-sprite exec -- sprite-env services create gateway \
-  --cmd bun \
-  --args src/index.ts \
-  --dir "$REMOTE_APP" \
-  --http-port 8080
-
 echo "Making the Sprite URL public so Sendblue can reach it..."
 sprite config update --url-auth public
 
@@ -98,13 +91,45 @@ if [[ -z "$URL" ]]; then
   exit 1
 fi
 
-export WEBHOOK_URL="${URL%/}/webhooks/sendblue/${WEBHOOK_PATH_SECRET}"
+ORIGIN="${URL%/}"
+python3 - "$ROOT/.env" SPRITE_URL "$ORIGIN" <<'PY'
+import pathlib, sys
+path = pathlib.Path(sys.argv[1])
+key, value = sys.argv[2], sys.argv[3]
+lines = path.read_text().splitlines() if path.exists() else []
+out, found = [], False
+for line in lines:
+    if line.startswith(f"{key}="):
+        out.append(f"{key}={value}")
+        found = True
+    else:
+        out.append(line)
+if not found:
+    if out and out[-1] != "":
+        out.append("")
+    out.append(f"{key}={value}")
+path.write_text("\n".join(out) + "\n")
+PY
+sprite exec -- bash -lc "cat > $REMOTE_APP/.env" < .env
+sprite exec -- bash -lc "grep -q AGENT_CWD= $REMOTE_APP/.env || echo AGENT_CWD=$REMOTE_AGENT >> $REMOTE_APP/.env"
+
+echo "Installing gateway as a Sprite service..."
+sprite exec -- bash -lc "sprite-env services get gateway >/dev/null 2>&1 && sprite-env services delete gateway || true"
+sprite exec -- sprite-env services create gateway \
+  --cmd bun \
+  --args src/index.ts \
+  --dir "$REMOTE_APP" \
+  --http-port 8080
+
+export WEBHOOK_URL="${ORIGIN}/webhooks/sendblue/${WEBHOOK_PATH_SECRET}"
 echo
 echo "Webhook URL:"
 echo "  $WEBHOOK_URL"
 if [[ -n "${DASHBOARD_SECRET:-}" ]]; then
   echo "Settings dashboard:"
-  echo "  ${URL%/}/settings/${DASHBOARD_SECRET}"
+  echo "  ${ORIGIN}/settings/${DASHBOARD_SECRET}"
+  echo "Live view:"
+  echo "  ${ORIGIN}/settings/${DASHBOARD_SECRET}/browser"
 else
   echo "Settings dashboard: off (set DASHBOARD_SECRET in .env to enable)"
 fi

@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import type { BrowserSession, BrowserStatus } from "./browser-session";
 import { BROWSER_CDP_PORT, browserProfileDir } from "./browser-session";
 import type { Config } from "./config";
+import { syncLiveViewFile } from "./live-view";
 import {
   addHttpMcpServers,
   isBuiltinMcpServer,
@@ -51,6 +52,7 @@ export async function handleDashboard(
 
   const url = new URL(request.url);
   if (!isDashboardPath(url.pathname, path)) return undefined;
+  syncLiveViewFile(options.config, request.headers);
 
   const viewerPath = `${path}/browser`;
   const wsPath = `${path}/browser/ws`;
