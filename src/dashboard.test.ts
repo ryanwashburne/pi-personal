@@ -221,7 +221,9 @@ test("starts the Sprite browser from the settings form", async () => {
   expect(viewer.body).toContain("streaming");
   expect(viewer.body).toContain(`${viewerPath}/ws`);
   expect(viewer.body).toContain("Connecting to Sprite display");
+  expect(viewer.body).toContain("noVNC@v1.5.0/core/rfb.js");
   expect(viewer.body).toContain('wsProtocols: ["binary"]');
+  expect(viewer.body).not.toContain("/lib/rfb.js");
   expect(viewer.body).not.toContain("nothing to stream");
 });
 

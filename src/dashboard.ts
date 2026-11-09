@@ -385,7 +385,7 @@ function viewerPage(
   <script type="module">
     const status = document.getElementById("status");
     try {
-      const { default: RFB } = await import("https://cdn.jsdelivr.net/npm/@novnc/novnc@1.5.0/lib/rfb.js");
+      const RFB = (await import("https://cdn.jsdelivr.net/gh/novnc/noVNC@v1.5.0/core/rfb.js")).default;
       const proto = location.protocol === "https:" ? "wss:" : "ws:";
       const rfb = new RFB(document.getElementById("screen"), proto + "//" + location.host + ${JSON.stringify(wsPath)}, { wsProtocols: ["binary"] });
       rfb.scaleViewport = true;
