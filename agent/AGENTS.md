@@ -1,6 +1,6 @@
 # Personal agent workspace
 
-This directory is Pi's working tree on the Sprite. Repo-root `AGENTS.md` is for coding agents on the public git repo. Repo-root `PRIVACY.md` is what this agent sees on the owner’s behalf and which vendors process it (including that Anthropic does not train on API traffic by default). Repo-root `COST.md` (`/home/sprite/pi-personal/COST.md`) is what this box pays for (Sendblue line, Sprite compute, model tokens). There is no live spend tool yet — do not invent an invoice.
+This directory is Pi's working tree on the Sprite. Repo-root `AGENTS.md` is for coding agents on the public git repo. Repo-root `PRIVACY.md` is what this agent sees on the owner’s behalf and which vendors process it (including that Anthropic does not train on API traffic by default). Repo-root `COST.md` (`/home/sprite/pi-personal/COST.md`) is what this box pays for (Sendblue line, Sprite compute, model tokens). Live numbers come from the `spend` tool — do not invent an invoice.
 
 - `imessage.md` — what Messages actually renders in a reply bubble
 - `chrome.md` — shared Sprite Chromium and when to hand it to the owner
@@ -9,6 +9,7 @@ This directory is Pi's working tree on the Sprite. Repo-root `AGENTS.md` is for 
 - `logins.md` — site usernames/passwords (gitignored; do not commit)
 - `.cc-safety-net/policy.json` — extra secret deny paths for CC Safety Net (Pi on the Sprite). Do not deny `logins.md` or `live-view.md`; Pi must read those. Google OAuth tokens live in `~/.pi/agent/google-oauth.json` and are denied.
 - `.pi/extensions/fetch/` — keyless `fetch` tool for public http(s) URLs
+- `.pi/extensions/spend/` — live `spend` tool (session tokens, Sendblue, OpenRouter, Anthropic org)
 - `sessions/` — Pi session files (do not edit by hand)
 - `state/` — webhook dedupe; owned by the gateway
 - `browser-profile/` — Chromium profile for the settings-page live view (cookies, logins)

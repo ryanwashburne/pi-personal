@@ -2,7 +2,7 @@
 
 What this personal iMessage agent pays for, which vendors bill, and which actions burn money.
 
-This is a standing map, not a live invoice. There is no spend tool yet — do not invent a current balance, overage, or “you’re over budget” from these rates. When live usage tools exist, they will query the vendors; until then, this file is what Pi and coding agents should read before doing something expensive.
+This is a standing map of **rates**. Live numbers come from the `spend` tool (Pi extension). Call `spend` when the owner asks what this costs. Quote only what the tool returned. Do not invent a current balance from these rates.
 
 Last reviewed: 9 Nov 2026 (America/New_York). Vendor prices change. Live secrets (`.env`, invoices, API keys) are not documented here and must not be opened by coding agents. This file does not read `.env`, so it cannot know which model key is actually configured.
 
@@ -23,6 +23,20 @@ Last reviewed: 9 Nov 2026 (America/New_York). Vendor prices change. Live secrets
 Fly invoices under **$5** are waived; Sendblue is a separate bill, so a cheap Sprite month does not cancel the line. Tigris object storage for Sprite disk is billed **on the Fly invoice**, not a second account.
 
 Sources: [Sendblue pricing](https://www.sendblue.com/pricing) · [Fly pricing](https://fly.io/pricing) · [Sprites](https://fly.io/sprites/) · [Anthropic API pricing](https://platform.claude.com/docs/en/about-claude/pricing) · [OpenRouter pricing](https://openrouter.ai/pricing) · [OpenAI pricing](https://developers.openai.com/api/docs/pricing) · [Gmail API quotas](https://developers.google.com/workspace/gmail/api/reference/quota) · [Tailscale pricing](https://tailscale.com/pricing)
+
+## Live `spend` tool
+
+Pi’s `spend` tool (allowlisted in the gateway) is the only supported way to read live usage. It does **not** open `.env` as a file and does **not** return message bodies or full phone numbers.
+
+| Source | What you get | Needs |
+| --- | --- | --- |
+| `vendor=model` (default includes this) | This iMessage session’s Pi-recorded token $ on the current branch | Session JSONL under `SESSION_DIR` |
+| Sendblue | Line count, new-contact caps, published $100/line | Existing `SENDBLUE_*` keys |
+| OpenRouter | This key’s usage / remaining limit | `OPENROUTER_API_KEY` |
+| Anthropic org | UTC-month `cost_report` for the **whole org** | `ANTHROPIC_ADMIN_API_KEY` (or an unscoped personal key). Workspace keys 403. |
+| Fly Sprites | Honest miss | Fly has no public billing API |
+
+Session files stay on the CC Safety Net deny list so Pi cannot `read` transcripts. `spend` parses them itself and returns totals only.
 
 ## Sendblue: the big fixed cost
 
@@ -98,7 +112,7 @@ Sprite sleeps → compute stops; cold disk keeps a small Fly charge
 
 ## Operator checks
 
-- There is **no live spend tool**. Do not claim a dollar amount for “this month” or “this text” unless a vendor dashboard or a future tool actually returned it.
+- Call `spend` for live numbers. Do not claim a dollar amount unless `spend` (or a vendor dashboard the owner opened) actually returned it.
 - Prefer `fetch` and Google MCP over Chrome. Open Chromium when the page needs login, JavaScript, or the owner must see it.
 - Do not change the model to a more expensive one, add MCP servers, or create infrastructure unless the owner asks.
 - Keep `memory/NOTES.md` short. Session JSONL is billed as context every turn — do not paste secrets or huge dumps into it.

@@ -65,7 +65,7 @@ Local stdio MCP on the Sprite talks to Gmail, Calendar, and Drive REST. Search f
 
 Gmail MCP can draft and cannot send. Tokens persist in `~/.pi/agent/google-oauth.json` across provision (that path is not under `agent/`).
 
-`provision.sh` also runs `pi install npm:cc-safety-net`. That extension blocks `.env`, SSH keys, and the extra paths in `agent/.cc-safety-net/policy.json` (`browser-profile`, sessions, MCP config, the gateway `.env`, Google OAuth tokens). It does **not** block `logins.md` or `live-view.md` — Pi has to read those. Built-in `fetch` (no API key) loads public http(s) pages without Chrome; Playwright stays for logins and JS. The RPC allowlist in the gateway includes `fetch`.
+`provision.sh` also runs `pi install npm:cc-safety-net`. That extension blocks `.env`, SSH keys, and the extra paths in `agent/.cc-safety-net/policy.json` (`browser-profile`, sessions, MCP config, the gateway `.env`, Google OAuth tokens). It does **not** block `logins.md` or `live-view.md` — Pi has to read those. Built-in `fetch` (no API key) loads public http(s) pages without Chrome; Playwright stays for logins and JS. Built-in `spend` reports live usage this agent can measure (this session’s tokens, Sendblue line caps, OpenRouter key usage, Anthropic org cost if `ANTHROPIC_ADMIN_API_KEY` is set). Fly has no billing API. The RPC allowlist includes `fetch` and `spend`.
 
 First-time Pi login on the Sprite:
 
