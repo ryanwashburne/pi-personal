@@ -27,6 +27,7 @@ Sources: [Is my data used for model training?](https://privacy.claude.com/en/art
 
 ```
 Owner iPhone → Apple iMessage → Sendblue Mac + API → Fly Sprite gateway → Pi (local tools) → Anthropic / OpenRouter / OpenAI
+Home daemon (Mac/rpi) → HTTPS /heartbeat → Fly Sprite gateway ↗
                                                                                  ↘ Sprite Chromium → Tailscale exit node → websites
 ```
 

@@ -20,6 +20,7 @@ test("Pi workspace documents iMessage-safe replies", () => {
   const system = readFileSync(join(agentDir, "SYSTEM.md"), "utf8");
   const agents = readFileSync(join(agentDir, "AGENTS.md"), "utf8");
   const imessage = readFileSync(join(agentDir, "imessage.md"), "utf8");
+  const heartbeat = readFileSync(join(agentDir, "HEARTBEAT.md"), "utf8");
 
   expect(system).toMatch(/iMessage only/i);
   expect(system).toMatch(/stop or cancel/i);
@@ -32,6 +33,7 @@ test("Pi workspace documents iMessage-safe replies", () => {
   expect(imessage).toMatch(/bare URLs/i);
   expect(imessage).toMatch(/data detectors/i);
   expect(imessage).toMatch(/Does not render/i);
+  expect(heartbeat).toContain("HEARTBEAT_OK");
 });
 
 test("Pi workspace documents shared Chrome and the live view URL", () => {
@@ -63,7 +65,10 @@ test("Pi workspace documents spend", () => {
   expect(system).toContain("COST.md");
   expect(system).toMatch(/spend-aware/i);
   expect(system).toMatch(/do not invent an invoice/i);
+  expect(system).toContain("HEARTBEAT.md");
+  expect(system).toContain("HEARTBEAT_OK");
   expect(agents).toContain("COST.md");
+  expect(agents).toContain("HEARTBEAT.md");
   expect(agents).toMatch(/no live spend tool/i);
 
   expect(cost).toMatch(/^# Cost/m);

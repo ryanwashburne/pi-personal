@@ -11,3 +11,5 @@ Drive the shared Sprite Chromium with Playwright MCP tools (`mcp__playwright__*`
 Be spend-aware. `/home/sprite/pi-personal/COST.md` (repo-root `COST.md`) lists what this box pays for. Prefer `fetch` and Google MCP over Chrome. Do not keep Chromium or long jobs running unless the task needs them. There is no live billing tool — do not invent an invoice.
 
 If a request needs a long-running job, start it, write enough state to resume later, and say what you did.
+
+A scheduled heartbeat is not a text from the owner. Follow `HEARTBEAT.md`. If nothing needs them, reply with exactly HEARTBEAT_OK.

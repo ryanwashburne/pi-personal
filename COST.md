@@ -38,6 +38,7 @@ What keeps it awake (and therefore billed):
 
 - The inbound webhook connection while Pi is working (`AGENT_TIMEOUT_MS` caps a turn; default 10 minutes)
 - The Tasks API hold the gateway takes during a turn
+- A home-daemon heartbeat ping (`/heartbeat/$HEARTBEAT_SECRET`, default every 30 minutes) — same wake + model turn as a text, even if the reply is `HEARTBEAT_OK` and nothing is iMessaged
 - An open live-view TCP connection (owner watching Chrome)
 - Chromium / Xvfb / a long shell job that keeps writing to a session
 
@@ -84,6 +85,7 @@ OpenRouter, if used, charges the upstream list price plus the credit-purchase fe
 | Switching `PI_MODEL` to Opus / Fable | Multiplies the per-text bill |
 | Extra HTTP MCP servers | Those hosts may bill on their own. Do not add paid APIs unless asked |
 | Extra Sprites or Sendblue numbers | Another VM’s disk + compute, or another $100 line |
+| Heartbeat interval of a few minutes | Each ping wakes the Sprite and pays a model turn, even on `HEARTBEAT_OK` |
 | Google API usage past daily thresholds | Not billed today; Google has said overage pricing comes later in 2026 |
 
 ## How a text spends money

@@ -21,7 +21,8 @@ This git repo is public. Secrets stay in gitignored files on the Mac and on the 
 - `scripts/provision.sh` — create/update the Sprite and copy `.env` + `agent/logins.md`; installs `cc-safety-net` into Pi
 - `agent/.cc-safety-net/policy.json` — extra deny paths for Pi (`browser-profile`, sessions, MCP files, gateway `.env`). `logins.md` and `live-view.md` stay readable to Pi
 - `agent/.pi/extensions/fetch/` — keyless HTTP `fetch` tool (no search API key)
-- `scripts/setup-macos-exit-node.sh` / `scripts/setup-rpi-exit-node.sh` — advertise a home Tailscale exit node (agent stays on the Sprite)
+- `scripts/install-home.sh` — Mac or Raspberry Pi daemon: Tailscale exit node + `/heartbeat` ping (agent stays on the Sprite)
+- `scripts/setup-macos-exit-node.sh` / `scripts/setup-rpi-exit-node.sh` — aliases for `install-home.sh`
 
 ## Commands
 
@@ -45,13 +46,13 @@ Do not commit unless asked. Do not push unless asked.
 **Ask first**
 
 - Registering the Sendblue webhook (`REGISTER_WEBHOOK=1`)
-- Changing allowlisted phones, dashboard/webhook secrets, or making the Sprite URL public
+- Changing allowlisted phones, dashboard/webhook/heartbeat secrets, or making the Sprite URL public
 
 **Never**
 
 - **Do not read the contents of `agent/logins.md`.** Do not open it in a file-read tool, dump it, grep field values, or paste usernames/passwords into chat, commits, PRs, or README. Existence and `##` headings only.
 - **Do not read the contents of `agent/live-view.md`.** It embeds `DASHBOARD_SECRET` in the URL. Existence only.
-- Do not read `.env` or print tokens, API keys, phone numbers, or `DASHBOARD_SECRET`.
+- Do not read `.env` or print tokens, API keys, phone numbers, `DASHBOARD_SECRET`, or `HEARTBEAT_SECRET`.
 - Do not commit `.env`, `agent/logins.md`, `agent/live-view.md`, `agent/browser-profile/`, `agent/sessions/`, or `agent/state/`.
 - Do not put the owner’s 1Password Personal/Private vault or the 1Password browser extension on the Sprite.
 - Do not ask the owner to iMessage a password. Logins happen on the settings-page live view, or Pi fills them with Playwright MCP from `logins.md`.
