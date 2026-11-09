@@ -43,7 +43,7 @@ To make Sprite Chrome look like your house IP, run a Tailscale **exit node** at 
 ./scripts/setup-macos-exit-node.sh
 ```
 
-That script advertises the Mac as an exit node and prints the `TAILSCALE_AUTHKEY` / `TAILSCALE_EXIT_NODE` values to put in `.env`. Re-run `./scripts/provision.sh`. Only Chromium uses the SOCKS proxy — Sendblue and the live-view URL stay on Fly. When the rpi is ready, advertise it as an exit node, set `TAILSCALE_EXIT_NODE` to the rpi name, provision again. The Mac (or rpi) must stay on while Chrome needs the home IP.
+That script advertises the Mac as an exit node and prints the `TAILSCALE_AUTHKEY` / `TAILSCALE_EXIT_NODE` values to put in `.env`. Re-run `./scripts/provision.sh`. The Sprite looks up that name in `tailscale status --json` and sets the exit node by its `100.x` address (MagicDNS is off so a hostname often fails). Only Chromium uses the SOCKS proxy — Sendblue and the live-view URL stay on Fly. When the rpi is ready, advertise it as an exit node, set `TAILSCALE_EXIT_NODE` to the rpi name, provision again. The Mac (or rpi) must stay on while Chrome needs the home IP.
 
 Pi always reads `~/.pi/agent/mcp.json`. With `--approve` it also reads `.pi/mcp.json` in the agent workspace. The settings page writes **both**, with `exposure: "direct"` so tools are declared to the model as `mcp__<name>__<tool>`. An empty `mcpServers` object means no MCP tools yet — paste a URL on the page, then send a new text. The settings page also runs `pi mcp list` so you can see connect errors instead of an empty tool list.
 
