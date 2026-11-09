@@ -117,7 +117,7 @@ test("serves HTML at the unguessable settings path", async () => {
   expect(result.status).toBe(200);
   expect(result.headers?.["content-type"]).toContain("text/html");
   expect(result.body).toContain("Add HTTP MCP");
-  expect(result.body).toContain("Google Workspace");
+  expect(result.body).toContain("<h2>Google</h2>");
   expect(result.body).toContain("missing — set GOOGLE_OAUTH_CLIENT_ID");
   expect(result.body).toContain("Playwright is always on");
   expect(result.body).toContain("Open live view");
@@ -411,7 +411,7 @@ test("rejects reserving the playwright MCP name for an HTTP server", async () =>
   expect(await listMcpServers(mcpPath)).toEqual([]);
 });
 
-test("rejects reserving Google Workspace MCP names on the add form", async () => {
+test("rejects reserving Google MCP names on the add form", async () => {
   const { gateway, restarts, mcpPath } = await setup();
   const path = dashboardPath(config);
   if (!path) throw new Error("dashboard path missing");
@@ -507,9 +507,9 @@ test("Google OAuth callback writes MCP servers and restarts Pi", async () => {
   const page = await gateway.handle(dash(path));
   expect(page.body).toContain(">connected<");
   expect(page.body).toContain("Disconnect");
-  expect(page.body).toContain("gmailmcp.googleapis.com");
-  expect(page.body).toContain("workspacemcp.googleapis.com");
+  expect(page.body).toContain("google-rest-mcp.ts");
   expect(page.body).toContain("mcp__search__*");
+  expect(page.body).not.toContain("gmailmcp.googleapis.com");
   expect(page.body).not.toContain("1//refresh");
   expect(page.body).not.toContain("ya29.access");
 });
@@ -527,7 +527,7 @@ test("Disconnect Google removes MCP servers and tokens", async () => {
     refreshToken: "1//refresh",
     expiresAt: Date.now() + 60 * 60_000,
   });
-  await upsertGoogleMcpServers([mcpPath], "/bin/echo Bearer tok");
+  await upsertGoogleMcpServers([mcpPath]);
   await gateway.handle(
     dash(path, {
       method: "POST",

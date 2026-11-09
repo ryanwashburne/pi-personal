@@ -58,7 +58,7 @@ export async function createGateway(options: GatewayOptions): Promise<Gateway> {
   }
   await syncGoogleWorkspaceMcp(options.config, mcpConfigPaths(options.config.mcpConfigPath, userMcpPath)).catch(
     (error) => {
-      console.warn("google workspace mcp config failed", error);
+      console.warn("google mcp config failed", error);
     },
   );
   const inFlight = new Set<string>();

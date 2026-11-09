@@ -6,13 +6,13 @@ import type { Config } from "./config";
 import { writeGoogleTokens } from "./google-oauth";
 import { googleAccessTokenFromEnv } from "./google-access-token";
 import {
+  defaultGoogleMcp,
   GOOGLE_MCP_SERVERS,
-  googleAuthorizationCommand,
   removeGoogleMcpServers,
   syncGoogleWorkspaceMcp,
   upsertGoogleMcpServers,
 } from "./google-mcp";
-import { listMcpServers } from "./mcp-config";
+import { addHttpMcpServer, listMcpServers } from "./mcp-config";
 
 const baseConfig: Config = {
   port: 8080,
@@ -37,24 +37,63 @@ const baseConfig: Config = {
   tailscaleSocksPort: 1055,
 };
 
-test("upserts Gmail, Calendar, Drive, and Universal Search MCP entries with a token command", async () => {
+test("upserts Gmail, Calendar, Drive, and search as local stdio MCP", async () => {
   const dir = await mkdtemp(join(tmpdir(), "google-mcp-"));
   const path = join(dir, "mcp.json");
-  await upsertGoogleMcpServers([path], "/bin/echo Bearer tok");
+  await upsertGoogleMcpServers([path], "/tmp/pi-personal/src");
   const listed = await listMcpServers(path);
   expect(listed.map((server) => server.name)).toEqual(["gmail", "calendar", "drive", "search"]);
-  expect(listed.every((server) => server.hasAuth)).toBe(true);
-  expect(listed.map((server) => server.target)).toEqual(GOOGLE_MCP_SERVERS.map((server) => server.url));
+  expect(listed.every((server) => server.kind === "stdio")).toBe(true);
+  expect(listed.map((server) => server.target)).toEqual(
+    GOOGLE_MCP_SERVERS.map((server) => `${process.execPath} /tmp/pi-personal/src/google-rest-mcp.ts ${server.name}`),
+  );
   const raw = JSON.parse(await readFile(path, "utf8")) as {
-    mcpServers: Record<string, { description?: string; headers?: { Authorization?: string }; exposure?: string }>;
+    mcpServers: Record<string, { description?: string; url?: string; headers?: unknown; exposure?: string }>;
   };
   expect(raw.mcpServers.gmail.exposure).toBe("direct");
+  expect(raw.mcpServers.gmail.url).toBeUndefined();
+  expect(raw.mcpServers.gmail.headers).toBeUndefined();
   expect(raw.mcpServers.gmail.description).toContain("Cannot send");
-  expect(raw.mcpServers.gmail.headers?.Authorization).toBe("!/bin/echo Bearer tok");
-  expect(raw.mcpServers.search.description).toContain("Universal Search");
-  expect(listed.find((server) => server.name === "search")?.target).toBe(
-    "https://workspacemcp.googleapis.com/mcp/v1",
-  );
+  expect(raw.mcpServers.search.description).toContain("Gmail, Calendar, and Drive");
+});
+
+test("replaces leftover hosted Google HTTP MCP entries with stdio", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "google-mcp-migrate-"));
+  const path = join(dir, "mcp.json");
+  await addHttpMcpServer(path, {
+    name: "gmail",
+    url: "https://gmailmcp.googleapis.com/mcp/v1",
+    authorizationCommand: "/bin/echo Bearer tok",
+    allowReserved: true,
+  });
+  await upsertGoogleMcpServers([path], "/tmp/pi-personal/src");
+  const listed = await listMcpServers(path);
+  expect(listed).toEqual([
+    {
+      name: "gmail",
+      kind: "stdio",
+      target: `${process.execPath} /tmp/pi-personal/src/google-rest-mcp.ts gmail`,
+      hasAuth: false,
+    },
+    {
+      name: "calendar",
+      kind: "stdio",
+      target: `${process.execPath} /tmp/pi-personal/src/google-rest-mcp.ts calendar`,
+      hasAuth: false,
+    },
+    {
+      name: "drive",
+      kind: "stdio",
+      target: `${process.execPath} /tmp/pi-personal/src/google-rest-mcp.ts drive`,
+      hasAuth: false,
+    },
+    {
+      name: "search",
+      kind: "stdio",
+      target: `${process.execPath} /tmp/pi-personal/src/google-rest-mcp.ts search`,
+      hasAuth: false,
+    },
+  ]);
 });
 
 test("sync writes Google MCP servers only while a refresh token exists", async () => {
@@ -69,7 +108,7 @@ test("sync writes Google MCP servers only while a refresh token exists", async (
     googleOAuthClientSecret: "client-secret",
     googleOAuthTokenPath: tokenPath,
   };
-  expect(await syncGoogleWorkspaceMcp(config, [mcpPath], "/bin/echo Bearer tok")).toBe(false);
+  expect(await syncGoogleWorkspaceMcp(config, [mcpPath])).toBe(false);
   expect(await listMcpServers(mcpPath)).toEqual([]);
 
   await writeGoogleTokens(tokenPath, {
@@ -77,7 +116,7 @@ test("sync writes Google MCP servers only while a refresh token exists", async (
     refreshToken: "1//refresh",
     expiresAt: Date.now() + 60 * 60_000,
   });
-  expect(await syncGoogleWorkspaceMcp(config, [mcpPath], "/bin/echo Bearer tok")).toBe(true);
+  expect(await syncGoogleWorkspaceMcp(config, [mcpPath])).toBe(true);
   expect((await listMcpServers(mcpPath)).map((server) => server.name)).toEqual([
     "gmail",
     "calendar",
@@ -119,8 +158,9 @@ test("google-access-token prints a Bearer token from env", async () => {
   expect(await child.exited).toBe(0);
 });
 
-test("authorization command quotes the bun path", () => {
-  const command = googleAuthorizationCommand("/tmp/pi-personal/src");
-  expect(command.startsWith("'")).toBe(true);
-  expect(command).toContain("google-access-token.ts");
+test("default Google MCP points bun at google-rest-mcp.ts", () => {
+  const spec = defaultGoogleMcp("gmail", "/tmp/pi-personal/src");
+  expect(spec.command).toBe(process.execPath);
+  expect(spec.args).toEqual(["/tmp/pi-personal/src/google-rest-mcp.ts", "gmail"]);
+  expect(spec.description).toContain("Cannot send");
 });

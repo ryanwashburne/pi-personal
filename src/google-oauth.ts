@@ -15,9 +15,6 @@ export const GOOGLE_OAUTH_SCOPES = [
   "https://www.googleapis.com/auth/calendar.readonly",
   "https://www.googleapis.com/auth/drive.readonly",
   "https://www.googleapis.com/auth/drive.file",
-  "https://www.googleapis.com/auth/chat.messages.readonly",
-  "https://www.googleapis.com/auth/chat.spaces.readonly",
-  "https://www.googleapis.com/auth/chat.memberships.readonly",
 ] as const;
 
 const PENDING_TTL_MS = 20 * 60 * 1000;
@@ -148,7 +145,7 @@ export async function disconnectGoogleOAuth(client: Pick<GoogleOAuthClient, "tok
 export async function ensureGoogleAccessToken(client: GoogleOAuthClient): Promise<string> {
   const tokens = await readGoogleTokens(client.tokenPath);
   if (!tokens?.refreshToken) {
-    throw new Error("Google Workspace is not connected. Open settings and click Connect.");
+    throw new Error("Google is not connected. Open settings and click Connect.");
   }
   if (tokens.accessToken && tokens.expiresAt - REFRESH_SKEW_MS > nowMs(client)) {
     return tokens.accessToken;

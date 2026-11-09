@@ -117,7 +117,7 @@ test("upserts a stdio Playwright MCP server and refuses to remove it", async () 
   ).rejects.toThrow(/reserved/);
 });
 
-test("reserves Google Workspace MCP names unless allowReserved is set", async () => {
+test("reserves Google MCP names unless allowReserved is set", async () => {
   const path = await tempMcp();
   await expect(addHttpMcpServer(path, { name: "gmail", url: "https://example.com/mcp" })).rejects.toThrow(
     /reserved/,

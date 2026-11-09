@@ -148,7 +148,7 @@ export async function handleDashboard(
         return redirect(path, undefined, "Playwright is built in so Pi can drive the Sprite browser.");
       }
       if (isGoogleMcpServer(name)) {
-        return redirect(path, undefined, "Use Disconnect under Google Workspace.");
+        return redirect(path, undefined, "Use Disconnect under Google.");
       }
       try {
         const removed = await removeMcpServers(configMcpPaths(options.config), name);
@@ -259,7 +259,7 @@ async function handleGoogleCallback(
   } catch (error) {
     return redirect(path, undefined, error instanceof Error ? error.message : String(error));
   }
-  return redirect(path, "Google Workspace connected. Pi will use Gmail, Calendar, Drive, and Universal Search on the next text.");
+  return redirect(path, "Google connected. Pi will use Gmail, Calendar, Drive, and search on the next text.");
 }
 
 async function disconnectGoogle(options: DashboardOptions, path: string): Promise<GatewayResult> {
@@ -271,7 +271,7 @@ async function disconnectGoogle(options: DashboardOptions, path: string): Promis
   } catch (error) {
     return redirect(path, undefined, error instanceof Error ? error.message : String(error));
   }
-  return redirect(path, "Disconnected Google Workspace.");
+  return redirect(path, "Disconnected Google.");
 }
 
 function shortFlash(message: string): string {
@@ -521,15 +521,15 @@ function googleSection(
     </p>`
     : "";
   return `
-    <h2>Google Workspace</h2>
-    <p class="lede">Official Gmail, Calendar, Drive, and Universal Search MCP servers. Sign in here once; Pi then calls them as <code>mcp__gmail__*</code>, <code>mcp__calendar__*</code>, <code>mcp__drive__*</code>, and <code>mcp__search__*</code>. Tokens stay on the Sprite, not in git.</p>
+    <h2>Google</h2>
+    <p class="lede">Gmail, Calendar, Drive, and search MCP on this Sprite. Sign in here once; Pi then calls them as <code>mcp__gmail__*</code>, <code>mcp__calendar__*</code>, <code>mcp__drive__*</code>, and <code>mcp__search__*</code>. The Sprite talks only to Google’s APIs. Tokens stay on the Sprite, not in git.</p>
     <table>
       <tr><th>Client</th><td>${google.configured ? "set" : "missing — set GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET"}</td></tr>
       <tr><th>Status</th><td>${escapeHtml(state)}</td></tr>
       ${redirect}
     </table>
     ${actions}
-    <p class="hint">In Google Cloud: enable Gmail, Calendar, Drive APIs and their MCP APIs, plus <strong>Google Workspace MCP API</strong> (<code>workspacemcp.googleapis.com</code>); create a <strong>Web application</strong> OAuth client; check <strong>Use this client for an AI-powered agent</strong>; add the redirect URI above; paste the client ID/secret into <code>.env</code> and re-run <code>./scripts/provision.sh</code>. Consent-screen scopes: ${GOOGLE_OAUTH_SCOPES.map((scope) => `<code>${escapeHtml(scope)}</code>`).join(" ")}. Join the Workspace developer preview if Google still refuses MCP calls. Gmail MCP drafts mail and does not send it. Universal Search also reads Chat when those scopes are granted.</p>`;
+    <p class="hint">In Google Cloud: enable <strong>Gmail API</strong>, <strong>Google Calendar API</strong>, and <strong>Google Drive API</strong> (not the Workspace MCP APIs). Create a <strong>Web application</strong> OAuth client; add the redirect URI above; paste the client ID/secret into <code>.env</code> and re-run <code>./scripts/provision.sh</code>. Consent-screen scopes: ${GOOGLE_OAUTH_SCOPES.map((scope) => `<code>${escapeHtml(scope)}</code>`).join(" ")}. Personal Gmail works. Gmail MCP drafts mail and does not send it. Search fans out across Gmail, Calendar, and Drive.</p>`;
 }
 
 function tailscaleSection(tailscale: TailscaleStatus): string {
