@@ -1,8 +1,10 @@
+import { spawn } from "node:child_process";
 import type { Config } from "./config";
 import {
-  addHttpMcpServer,
-  listMcpServers,
-  removeMcpServer,
+  addHttpMcpServers,
+  listMcpServersFrom,
+  mcpConfigPaths,
+  removeMcpServers,
   validateMcpName,
   validateMcpUrl,
   type ListedMcpServer,
@@ -57,7 +59,7 @@ export async function handleDashboard(
       const urlError = validateMcpUrl(mcpUrl);
       if (urlError) return redirect(path, undefined, urlError);
       try {
-        await addHttpMcpServer(options.config.mcpConfigPath, {
+        await addHttpMcpServers(configMcpPaths(options.config), {
           name,
           url: mcpUrl,
           bearerToken: bearerToken.trim() || undefined,
@@ -71,7 +73,7 @@ export async function handleDashboard(
     case "remove": {
       const name = String(form.get("name") ?? "");
       try {
-        const removed = await removeMcpServer(options.config.mcpConfigPath, name);
+        const removed = await removeMcpServers(configMcpPaths(options.config), name);
         if (!removed) return redirect(path, undefined, `No server named ${name}.`);
         await options.pi.restart();
       } catch (error) {
@@ -112,14 +114,16 @@ async function render(
   let servers: ListedMcpServer[] = [];
   let loadError = error;
   try {
-    servers = await listMcpServers(options.config.mcpConfigPath);
+    servers = await listMcpServersFrom(configMcpPaths(options.config));
   } catch (caught) {
     loadError = caught instanceof Error ? caught.message : String(caught);
   }
 
+  const mcpStatus = await probePiMcp(options.config);
+
   return {
     status: 200,
-    body: page(options.config, servers, notice, loadError),
+    body: page(options.config, servers, notice, loadError, mcpStatus),
     headers: {
       "content-type": "text/html; charset=utf-8",
       "cache-control": "no-store",
@@ -132,6 +136,7 @@ function page(
   servers: ListedMcpServer[],
   notice: string | null,
   error: string | null,
+  mcpStatus: string | undefined,
 ): string {
   const model = config.piModel ?? "Pi default";
   const provider = config.piProvider ?? "Pi default";
@@ -163,6 +168,7 @@ function page(
     input { font: inherit; padding: 0.45rem 0.5rem; }
     button { font: inherit; padding: 0.45rem 0.7rem; }
     code { font-size: 0.9em; }
+    pre.status { white-space: pre-wrap; font-size: 0.82rem; padding: 0.7rem; border: 1px solid color-mix(in srgb, CanvasText 18%, transparent); overflow: auto; }
     .row-form { display: inline; }
   </style>
 </head>
@@ -178,17 +184,20 @@ function page(
       <tr><th>Phone</th><td><code>${escapeHtml(config.allowedPhone)}</code></td></tr>
       <tr><th>Model</th><td><code>${escapeHtml(model)}</code></td></tr>
       <tr><th>Provider</th><td><code>${escapeHtml(provider)}</code></td></tr>
+      <tr><th>Project MCP</th><td><code>${escapeHtml(config.mcpConfigPath)}</code></td></tr>
+      <tr><th>User MCP</th><td><code>${escapeHtml(config.userMcpPath)}</code></td></tr>
     </table>
-    <p class="hint">Model and phone come from <code>.env</code> on the Sprite. Change those there, then re-run <code>./scripts/provision.sh</code>.</p>
+    <p class="hint">Model and phone come from <code>.env</code> on the Sprite. Change those there, then re-run <code>./scripts/provision.sh</code>. Pi always reads the user MCP file; the project file needs <code>--approve</code>.</p>
 
     <h2>MCP servers</h2>
+    ${mcpStatus ? `<pre class="status">${escapeHtml(mcpStatus)}</pre>` : `<p class="hint">Could not run <code>pi mcp list</code> yet. After provision, this block shows whether Pi connected and which <code>mcp__*</code> tools it loaded.</p>`}
     <table>
       <thead><tr><th>Name</th><th>Target</th><th>Auth</th><th></th></tr></thead>
       <tbody>${rows}</tbody>
     </table>
 
     <h2>Add HTTP MCP</h2>
-    <p class="hint">Paste the server’s streamable HTTP URL (usually ending in <code>/mcp</code>). Saved to <code>.pi/mcp.json</code> in this workspace so Pi and this page see the same file. Optional bearer token stays on the Sprite, not in git.</p>
+    <p class="hint">Paste the streamable HTTP URL (usually ending in <code>/mcp</code>). Saved to both MCP files with <code>exposure: direct</code> so tools are declared to the model. Optional bearer token stays on the Sprite, not in git.</p>
     <form class="stack" method="post">
       <input type="hidden" name="action" value="add">
       <label>Name
@@ -220,6 +229,50 @@ function serverRow(server: ListedMcpServer): string {
       </form>
     </td>
   </tr>`;
+}
+
+function configMcpPaths(config: Pick<Config, "mcpConfigPath" | "userMcpPath">): string[] {
+  return mcpConfigPaths(config.mcpConfigPath, config.userMcpPath);
+}
+
+async function probePiMcp(config: Config): Promise<string | undefined> {
+  // Unit tests use a 1s agent timeout; skip the live Pi probe there.
+  if (config.agentTimeoutMs <= 5_000) return undefined;
+  return new Promise((resolve) => {
+    const child = spawn(config.piCli, ["mcp", "list", "--approve"], {
+      cwd: config.agentCwd,
+      env: process.env,
+    });
+    let out = "";
+    const timer = setTimeout(() => {
+      child.kill("SIGTERM");
+      resolve(redactMcpStatus(out) || undefined);
+    }, 12_000);
+    child.stdout?.setEncoding("utf8");
+    child.stderr?.setEncoding("utf8");
+    child.stdout?.on("data", (chunk: string) => {
+      out += chunk;
+    });
+    child.stderr?.on("data", (chunk: string) => {
+      out += chunk;
+    });
+    child.on("error", () => {
+      clearTimeout(timer);
+      resolve(undefined);
+    });
+    child.on("close", () => {
+      clearTimeout(timer);
+      resolve(redactMcpStatus(out) || undefined);
+    });
+  });
+}
+
+function redactMcpStatus(value: string): string {
+  return value
+    .replace(/Bearer \S+/gi, "Bearer [redacted]")
+    .replace(/Authorization:\s*.*/gi, "Authorization: [redacted]")
+    .trim()
+    .slice(-4000);
 }
 
 function escapeHtml(value: string): string {

@@ -48,6 +48,10 @@ export function defaultUserMcpPath(): string {
   return join(homedir(), ".pi/agent/mcp.json");
 }
 
+export function mcpConfigPaths(projectPath: string, userPath: string): string[] {
+  return [...new Set([userPath, projectPath].filter((path) => path.trim().length > 0))];
+}
+
 export async function migrateUserMcpToProject(
   projectPath: string,
   userPath?: string,
@@ -59,6 +63,35 @@ export async function migrateUserMcpToProject(
   await mkdir(dirname(projectPath), { recursive: true });
   await copyFile(from, projectPath);
   return true;
+}
+
+export async function syncMcpConfigFiles(projectPath: string, userPath: string): Promise<void> {
+  await migrateUserMcpToProject(projectPath, userPath);
+  await migrateUserMcpToProject(userPath, projectPath);
+}
+
+export async function listMcpServersFrom(paths: string[]): Promise<ListedMcpServer[]> {
+  const byName = new Map<string, ListedMcpServer>();
+  for (const path of [...new Set(paths.filter((entry) => entry.trim().length > 0))]) {
+    for (const server of await listMcpServers(path)) {
+      byName.set(server.name, server);
+    }
+  }
+  return [...byName.values()];
+}
+
+export async function addHttpMcpServers(paths: string[], input: AddHttpMcpServer): Promise<void> {
+  const unique = [...new Set(paths.filter((path) => path.trim().length > 0))];
+  if (unique.length === 0) throw new Error("No MCP config path to write.");
+  for (const path of unique) {
+    await addHttpMcpServer(path, input);
+  }
+}
+
+export async function removeMcpServers(paths: string[], name: string): Promise<boolean> {
+  const unique = [...new Set(paths.filter((path) => path.trim().length > 0))];
+  const results = await Promise.all(unique.map((path) => removeMcpServer(path, name)));
+  return results.some(Boolean);
 }
 
 export async function listMcpServers(path: string): Promise<ListedMcpServer[]> {
@@ -107,6 +140,7 @@ export async function addHttpMcpServer(path: string, input: AddHttpMcpServer): P
 
   const next: Record<string, unknown> = {
     ...existing,
+    type: "http",
     url: input.url.trim(),
     exposure: "direct",
   };

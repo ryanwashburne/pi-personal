@@ -21,6 +21,7 @@ const config: Config = {
   agentCwd: "/tmp",
   sessionDir: "/tmp",
   mcpConfigPath: "/tmp/mcp.json",
+  userMcpPath: "/tmp/user-mcp.json",
   agentTimeoutMs: 1000,
   piProvider: "openrouter",
   piModel: "anthropic/claude-haiku-5.5",
@@ -30,7 +31,7 @@ async function setup() {
   const dir = await mkdtemp(join(tmpdir(), "pi-dashboard-"));
   const restarts: number[] = [];
   const gateway = await createGateway({
-    config: { ...config, agentCwd: dir, mcpConfigPath: join(dir, "mcp.json") },
+    config: { ...config, agentCwd: dir, mcpConfigPath: join(dir, "mcp.json"), userMcpPath: join(dir, "user-mcp.json") },
     userMcpPath: join(dir, "missing-user-mcp.json"),
     sendblue: {
       async sendTyping() {},
@@ -50,7 +51,7 @@ async function setup() {
       return { async heartbeat() {}, async release() {} };
     },
   });
-  return { gateway, restarts, mcpPath: join(dir, "mcp.json") };
+  return { gateway, restarts, mcpPath: join(dir, "mcp.json"), userPath: join(dir, "user-mcp.json") };
 }
 
 function dash(path: string, init?: RequestInit) {
@@ -76,6 +77,7 @@ test("does not serve a dashboard when DASHBOARD_SECRET is unset", async () => {
       dashboardPathSecret: undefined,
       agentCwd: dir,
       mcpConfigPath: join(dir, "mcp.json"),
+      userMcpPath: join(dir, "user-mcp.json"),
     },
     sendblue: { async sendTyping() {}, async sendMessage() {} },
     pi: { async prompt() { return ""; }, async restart() {}, async stop() {} },
@@ -96,7 +98,7 @@ test("404s a guessed settings path", async () => {
 });
 
 test("adds an HTTP MCP server from the form and restarts Pi", async () => {
-  const { gateway, restarts, mcpPath } = await setup();
+  const { gateway, restarts, mcpPath, userPath } = await setup();
   const path = dashboardPath(config);
   if (!path) throw new Error("dashboard path missing");
   const posted = await gateway.handle(
@@ -114,6 +116,14 @@ test("adds an HTTP MCP server from the form and restarts Pi", async () => {
   expect(posted.headers?.Location).toContain("notice=");
   expect(restarts).toHaveLength(1);
   expect(await listMcpServers(mcpPath)).toEqual([
+    {
+      name: "calendar",
+      kind: "http",
+      target: "https://mcp.example.com/mcp",
+      hasAuth: true,
+    },
+  ]);
+  expect(await listMcpServers(userPath)).toEqual([
     {
       name: "calendar",
       kind: "http",

@@ -1,3 +1,4 @@
+import { homedir } from "node:os";
 import { join } from "node:path";
 
 export type Config = {
@@ -13,6 +14,7 @@ export type Config = {
   agentCwd: string;
   sessionDir: string;
   mcpConfigPath: string;
+  userMcpPath: string;
   agentTimeoutMs: number;
   piProvider: string | undefined;
   piModel: string | undefined;
@@ -45,6 +47,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     agentCwd,
     sessionDir: env.SESSION_DIR?.trim() || join(agentCwd, "sessions"),
     mcpConfigPath: env.MCP_CONFIG_PATH?.trim() || join(agentCwd, ".pi/mcp.json"),
+    userMcpPath: env.MCP_USER_CONFIG_PATH?.trim() || join(homedir(), ".pi/agent/mcp.json"),
     agentTimeoutMs: Number(env.AGENT_TIMEOUT_MS ?? 600_000),
     piProvider: emptyToUndefined(env.PI_PROVIDER),
     piModel: emptyToUndefined(env.PI_MODEL),

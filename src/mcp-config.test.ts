@@ -4,9 +4,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   addHttpMcpServer,
+  addHttpMcpServers,
   listMcpServers,
+  listMcpServersFrom,
   migrateUserMcpToProject,
   removeMcpServer,
+  syncMcpConfigFiles,
   validateMcpName,
 } from "./mcp-config";
 
@@ -32,8 +35,10 @@ test("adds an HTTP MCP server with a bearer token", async () => {
     { name: "calendar", kind: "http", target: "https://example.com/mcp", hasAuth: true },
   ]);
   const raw = JSON.parse(await readFile(path, "utf8")) as {
-    mcpServers: { calendar: { headers?: { Authorization?: string } } };
+    mcpServers: { calendar: { type?: string; exposure?: string; headers?: { Authorization?: string } } };
   };
+  expect(raw.mcpServers.calendar.type).toBe("http");
+  expect(raw.mcpServers.calendar.exposure).toBe("direct");
   expect(raw.mcpServers.calendar.headers?.Authorization).toBe("Bearer secret-token");
 });
 
@@ -44,6 +49,27 @@ test("copies user-level MCP config into the project file when the project is emp
   await addHttpMcpServer(userPath, { name: "docs", url: "https://docs.example/mcp" });
   expect(await migrateUserMcpToProject(projectPath, userPath)).toBe(true);
   expect(await listMcpServers(projectPath)).toEqual([
+    { name: "docs", kind: "http", target: "https://docs.example/mcp", hasAuth: false },
+  ]);
+});
+
+test("copies project MCP config into the user file when the user file is empty", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "mcp-migrate-user-"));
+  const userPath = join(dir, "user.json");
+  const projectPath = join(dir, "project.json");
+  await addHttpMcpServer(projectPath, { name: "docs", url: "https://docs.example/mcp" });
+  await syncMcpConfigFiles(projectPath, userPath);
+  expect(await listMcpServers(userPath)).toEqual([
+    { name: "docs", kind: "http", target: "https://docs.example/mcp", hasAuth: false },
+  ]);
+});
+
+test("writes an HTTP MCP server to every given config path", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "mcp-dual-"));
+  const projectPath = join(dir, "project.json");
+  const userPath = join(dir, "user.json");
+  await addHttpMcpServers([projectPath, userPath], { name: "docs", url: "https://docs.example/mcp" });
+  expect(await listMcpServersFrom([projectPath, userPath])).toEqual([
     { name: "docs", kind: "http", target: "https://docs.example/mcp", hasAuth: false },
   ]);
 });
