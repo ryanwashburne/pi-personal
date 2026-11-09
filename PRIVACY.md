@@ -40,7 +40,7 @@ The reply walks the message path back. Browser traffic is a side path. Sprite di
 | Phone numbers | Webhook `from_number`; `ALLOWED_PHONE`; Sendblue from-number | Allowlist; typing indicator; reply routing; settings page display | Yes — Sendblue, settings HTML, gateway logs |
 | Attachments | Sendblue `media_url` (CDN link; gateway does not download) | Appended to the prompt as a URL. Pi may fetch it. | URL always to the LLM. Bytes only if Pi fetches them. |
 | Conversation history | Pi JSONL under `agent/sessions/` (session-id `imessage`) | Every later turn’s context | Yes — full history to the LLM each turn; disk replica on Tigris |
-| System + skill files | `SYSTEM.md`, `imessage.md`, `chrome.md`, `live-view.md`, `memory/NOTES.md` | Standing instructions and durable memory | Yes — included in model context when Pi loads them |
+| System + skill files | `SYSTEM.md`, `imessage.md`, `chrome.md`, `live-view.md`, `memory/NOTES.md`, `PRIVACY.md`, `COST.md` | Standing instructions and durable memory | Yes — included in model context when Pi loads them |
 | Site logins | gitignored `logins.md` (url / username / password / notes) | Pi fills Sprite Chrome via Playwright. Must not be texted. | To the LLM if Pi reads the file or passes values as tool args |
 | Browser cookies / logged-in sites | `agent/browser-profile/` Chromium profile | Stay signed in across Sprite sleeps | Page snapshots and fetched content go to the LLM. Cookies stay on disk unless a site or Chrome syncs them. |
 | Live Chrome session | Playwright MCP accessibility tree; optional screenshots; VNC live view | Act on the web; owner can watch or type (including paste) | Snapshots/screenshots → LLM. VNC pixels → whoever has the settings URL. noVNC JS loaded from jsDelivr. |

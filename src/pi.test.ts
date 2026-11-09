@@ -54,6 +54,25 @@ test("Pi workspace documents shared Chrome and the live view URL", () => {
   expect(chrome).toContain("fetch");
 });
 
+test("Pi workspace documents spend", () => {
+  const agentDir = join(import.meta.dir, "../agent");
+  const system = readFileSync(join(agentDir, "SYSTEM.md"), "utf8");
+  const agents = readFileSync(join(agentDir, "AGENTS.md"), "utf8");
+  const cost = readFileSync(join(import.meta.dir, "../COST.md"), "utf8");
+
+  expect(system).toContain("COST.md");
+  expect(system).toMatch(/spend-aware/i);
+  expect(system).toMatch(/do not invent an invoice/i);
+  expect(agents).toContain("COST.md");
+  expect(agents).toMatch(/no live spend tool/i);
+
+  expect(cost).toMatch(/^# Cost/m);
+  expect(cost).toMatch(/Sendblue/i);
+  expect(cost).toMatch(/Sprite/i);
+  expect(cost).toMatch(/no spend tool yet/i);
+  expect(cost).toMatch(/do not invent a current balance/i);
+});
+
 function rpcLog(dir: string): Array<{ type?: string; message?: string; streamingBehavior?: string }> {
   return readFileSync(join(dir, "fake-pi-rpc.log"), "utf8")
     .trim()
