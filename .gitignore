@@ -13,6 +13,7 @@ credentials.json
 # Pi / gateway state on disk
 agent/sessions/
 agent/state/
+agent/browser-profile/
 /.pi/
 
 # deps and junk

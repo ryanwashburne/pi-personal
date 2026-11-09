@@ -35,7 +35,7 @@ Fill `.env` (this file is gitignored):
 
 That creates Sprite `pi-personal`, copies this repo onto it, installs `gateway` as the HTTP service, and prints the public webhook URL and settings page. Re-run with `REGISTER_WEBHOOK=1` to append that URL on your Sendblue account, or paste it in the Sendblue dashboard yourself.
 
-The Sprite already hosts HTTP on port 8080. The settings page is the same public `*.sprites.app` URL, at `/settings/$DASHBOARD_SECRET`. Open it in a browser to add an HTTP MCP server (your URL, optional bearer token). Do not share that link; it is the only auth on the page. The webhook path stays separate so Sendblue never sees the dashboard secret.
+The Sprite already hosts HTTP on port 8080. The settings page is the same public `*.sprites.app` URL, at `/settings/$DASHBOARD_SECRET`. Open it in a browser to add an HTTP MCP server (your URL, optional bearer token) and to start the Sprite Chromium. **Open live view** streams that browser so you can log into sites yourself — never text passwords. Cookies stay in `agent/browser-profile/` across sleeps. Do not share that link; it is the only auth on the page. The webhook path stays separate so Sendblue never sees the dashboard secret.
 
 Pi always reads `~/.pi/agent/mcp.json`. With `--approve` it also reads `.pi/mcp.json` in the agent workspace. The settings page writes **both**, with `exposure: "direct"` so tools are declared to the model as `mcp__<name>__<tool>`. An empty `mcpServers` object means no MCP tools yet — paste a URL on the page, then send a new text. The settings page also runs `pi mcp list` so you can see connect errors instead of an empty tool list.
 
@@ -64,9 +64,9 @@ The gateway can also run on your laptop (`bun start`) with the same `.env` if yo
 
 ## Layout
 
-- `src/` — webhook gateway (Bun)
+- `src/` — webhook gateway (Bun), including the settings live-view browser
 - `agent/` — Pi working tree (`SYSTEM.md`, notes). Copied to `/home/sprite/agent` on the Sprite
-- `scripts/provision.sh` — create/update the Sprite
+- `scripts/provision.sh` — create/update the Sprite; installs Chromium/Xvfb/x11vnc if missing
 - `.env.example` — names of required secrets, no real values
 
 ## What must not be committed
@@ -74,6 +74,7 @@ The gateway can also run on your laptop (`bun start`) with the same `.env` if yo
 - `.env` and any real API keys, phone numbers, or webhook secrets
 - `.sprite` (Fly org/sprite selection)
 - `agent/sessions/` and `agent/state/` (conversation history)
+- `agent/browser-profile/` (Chromium logins and cookies)
 - Pi `auth.json` / provider credentials
 
-Access control for the live agent is the unguessable webhook path, the Sendblue signing secret, the phone allowlist in `.env`, and the unguessable settings path. Sendblue keys stay in the gateway. Pi does not get a “text anyone” tool.
+Access control for the live agent is the unguessable webhook path, the Sendblue signing secret, the phone allowlist in `.env`, and the unguessable settings path (that same path is the only lock on the streamed browser). Sendblue keys stay in the gateway. Pi does not get a “text anyone” tool.
