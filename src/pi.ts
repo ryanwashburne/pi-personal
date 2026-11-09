@@ -1,6 +1,7 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { mkdirSync } from "node:fs";
 import type { Config } from "./config";
+import { isStopCommand } from "./stop-command";
 
 type RpcResponse = {
   type: "response";
@@ -10,13 +11,23 @@ type RpcResponse = {
   error?: string;
 };
 
+export type PromptResult = { kind: "reply"; text: string } | { kind: "injected" };
+
 export type PiAgent = {
-  prompt: (message: string) => Promise<string>;
+  prompt: (message: string) => Promise<PromptResult>;
   restart: () => Promise<void>;
   stop: () => Promise<void>;
 };
 
+type RunningTurn = {
+  started: Promise<void>;
+  finished: Promise<string>;
+  suppressDeliver: boolean;
+};
+
 export const PI_RPC_TOOLS = "read,bash,edit,write,grep,find,ls,codemode,tool_search,mcp__*";
+
+const RPC_ACK_TIMEOUT_MS = 30_000;
 
 export function createPiAgent(config: Config): PiAgent {
   let child: ChildProcessWithoutNullStreams | undefined;
@@ -28,9 +39,7 @@ export function createPiAgent(config: Config): PiAgent {
   >();
   const idleWaiters = new Set<() => void>();
   let starting: Promise<void> | undefined;
-  let busy = false;
-  const queue: Array<{ message: string; resolve: (text: string) => void; reject: (error: Error) => void }> =
-    [];
+  let running: RunningTurn | undefined;
 
   function ensureStarted(): Promise<void> {
     if (child && child.exitCode === null) return Promise.resolve();
@@ -116,7 +125,7 @@ export function createPiAgent(config: Config): PiAgent {
     }
   }
 
-  function send(command: Record<string, unknown>): Promise<RpcResponse> {
+  function send(command: Record<string, unknown>, timeoutMs = RPC_ACK_TIMEOUT_MS): Promise<RpcResponse> {
     const proc = child;
     if (!proc?.stdin.writable) {
       return Promise.reject(new Error("pi RPC is not running"));
@@ -126,7 +135,7 @@ export function createPiAgent(config: Config): PiAgent {
       const timer = setTimeout(() => {
         pending.delete(id);
         reject(new Error(`timeout waiting for pi ${String(command.type)}`));
-      }, 30_000);
+      }, timeoutMs);
       pending.set(id, {
         resolve: (value) => {
           clearTimeout(timer);
@@ -155,42 +164,101 @@ export function createPiAgent(config: Config): PiAgent {
     });
   }
 
-  async function runPrompt(message: string): Promise<string> {
-    await ensureStarted();
-    const accepted = await send({ type: "prompt", message });
-    if (!accepted.success) {
-      throw new Error(accepted.error ?? "pi rejected prompt");
-    }
-    if (accepted.data?.disposition !== "handled") {
-      await waitForIdle(config.agentTimeoutMs);
-    }
-    const text = await send({ type: "get_last_assistant_text" });
-    if (!text.success) {
-      throw new Error(text.error ?? "pi did not return assistant text");
-    }
-    return text.data?.text?.trim() || "I finished, but I don't have a text reply.";
-  }
-
-  function enqueue(message: string): Promise<string> {
-    return new Promise((resolve, reject) => {
-      queue.push({ message, resolve, reject });
-      void drain();
-    });
-  }
-
-  async function drain() {
-    if (busy) return;
-    const next = queue.shift();
-    if (!next) return;
-    busy = true;
+  async function runPrompt(message: string, markStarted: () => void): Promise<string> {
     try {
-      next.resolve(await runPrompt(next.message));
-    } catch (error) {
-      next.reject(error instanceof Error ? error : new Error(String(error)));
+      const accepted = await send({ type: "prompt", message });
+      markStarted();
+      if (!accepted.success) {
+        throw new Error(accepted.error ?? "pi rejected prompt");
+      }
+      if (accepted.data?.disposition !== "handled") {
+        await waitForIdle(config.agentTimeoutMs);
+      }
+      const text = await send({ type: "get_last_assistant_text" });
+      if (!text.success) {
+        throw new Error(text.error ?? "pi did not return assistant text");
+      }
+      return text.data?.text?.trim() || "I finished, but I don't have a text reply.";
     } finally {
-      busy = false;
-      void drain();
+      markStarted();
     }
+  }
+
+  async function trySteer(message: string): Promise<boolean> {
+    try {
+      const steered = await send({ type: "steer", message });
+      if (steered.success) return true;
+    } catch (error) {
+      console.warn("pi steer failed", error);
+    }
+    try {
+      const queued = await send({ type: "prompt", message, streamingBehavior: "steer" });
+      return queued.success && queued.data?.disposition === "queued";
+    } catch (error) {
+      console.warn("pi prompt steer failed", error);
+      return false;
+    }
+  }
+
+  async function finalize(turn: RunningTurn): Promise<PromptResult> {
+    try {
+      const text = await turn.finished;
+      if (turn.suppressDeliver) return { kind: "injected" };
+      return { kind: "reply", text };
+    } catch (error) {
+      if (turn.suppressDeliver) return { kind: "injected" };
+      throw error;
+    } finally {
+      if (running === turn) running = undefined;
+    }
+  }
+
+  function startTurn(message: string): Promise<PromptResult> {
+    if (running) return dispatch(message);
+    let started = false;
+    let markStarted = () => {};
+    const startedP = new Promise<void>((resolve) => {
+      markStarted = () => {
+        if (started) return;
+        started = true;
+        resolve();
+      };
+    });
+    const turn: RunningTurn = {
+      started: startedP,
+      finished: Promise.resolve(""),
+      suppressDeliver: false,
+    };
+    running = turn;
+    turn.finished = runPrompt(message, markStarted);
+    return finalize(turn);
+  }
+
+  async function dispatch(message: string): Promise<PromptResult> {
+    const current = running;
+    if (!current) return startTurn(message);
+    await current.started.catch(() => {});
+    if (isStopCommand(message)) {
+      current.suppressDeliver = true;
+      try {
+        await send({ type: "abort" }, config.agentTimeoutMs);
+      } catch (error) {
+        console.warn("pi abort failed", error);
+      }
+      await current.finished.catch(() => {});
+      return dispatch(message);
+    }
+    if (await trySteer(message)) {
+      await current.finished.catch(() => {});
+      return { kind: "injected" };
+    }
+    await current.finished.catch(() => {});
+    return dispatch(message);
+  }
+
+  async function prompt(message: string): Promise<PromptResult> {
+    await ensureStarted();
+    return dispatch(message);
   }
 
   async function stop() {
@@ -208,7 +276,7 @@ export function createPiAgent(config: Config): PiAgent {
   }
 
   return {
-    prompt: enqueue,
+    prompt,
     restart: stop,
     stop,
   };

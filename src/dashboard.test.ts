@@ -74,7 +74,7 @@ async function setup() {
     },
     pi: {
       async prompt() {
-        return "unused";
+        return { kind: "reply", text: "unused" };
       },
       async restart() {
         restarts.push(1);
@@ -125,7 +125,7 @@ test("does not serve a dashboard when DASHBOARD_SECRET is unset", async () => {
       userMcpPath: join(dir, "user-mcp.json"),
     },
     sendblue: { async sendTyping() {}, async sendMessage() {} },
-    pi: { async prompt() { return ""; }, async restart() {}, async stop() {} },
+    pi: { async prompt() { return { kind: "reply" as const, text: "" }; }, async restart() {}, async stop() {} },
     userMcpPath: join(dir, "missing-user-mcp.json"),
     browserMcp: false,
     dedupe: await createDedupe(join(dir, "processed.json")),
@@ -261,7 +261,7 @@ test("settings page shows Tailscale status and last error", async () => {
     },
     userMcpPath: join(dir, "missing-user-mcp.json"),
     sendblue: { async sendTyping() {}, async sendMessage() {} },
-    pi: { async prompt() { return ""; }, async restart() {}, async stop() {} },
+    pi: { async prompt() { return { kind: "reply" as const, text: "" }; }, async restart() {}, async stop() {} },
     browser: mockBrowser(dir),
     tailscale: {
       status: () => ({
@@ -303,7 +303,7 @@ test("live view explains a crashed browser instead of a blank screen", async () 
     config: { ...config, agentCwd: dir, mcpConfigPath: join(dir, "mcp.json"), userMcpPath: join(dir, "user-mcp.json") },
     userMcpPath: join(dir, "missing-user-mcp.json"),
     sendblue: { async sendTyping() {}, async sendMessage() {} },
-    pi: { async prompt() { return ""; }, async restart() {}, async stop() {} },
+    pi: { async prompt() { return { kind: "reply" as const, text: "" }; }, async restart() {}, async stop() {} },
     browser,
     browserMcp: false,
     dedupe: await createDedupe(join(dir, "processed.json")),
@@ -352,7 +352,7 @@ test("writes the built-in Playwright MCP server and hides remove", async () => {
     config: { ...config, agentCwd: dir, mcpConfigPath: join(dir, "mcp.json"), userMcpPath: join(dir, "user-mcp.json") },
     userMcpPath: join(dir, "user-mcp.json"),
     sendblue: { async sendTyping() {}, async sendMessage() {} },
-    pi: { async prompt() { return ""; }, async restart() {}, async stop() {} },
+    pi: { async prompt() { return { kind: "reply" as const, text: "" }; }, async restart() {}, async stop() {} },
     browser: mockBrowser(dir),
     dedupe: await createDedupe(join(dir, "processed.json")),
     async hold() {
