@@ -4,6 +4,7 @@ import type { TailscaleService } from "./tailscale";
 import { normalizePhone, type Config } from "./config";
 import { handleDashboard } from "./dashboard";
 import { createDedupe, type Dedupe } from "./dedupe";
+import { syncGoogleWorkspaceMcp } from "./google-mcp";
 import {
   BROWSER_MCP_NAME,
   mcpConfigPaths,
@@ -55,6 +56,11 @@ export async function createGateway(options: GatewayOptions): Promise<Gateway> {
       console.warn("playwright mcp config failed", error);
     });
   }
+  await syncGoogleWorkspaceMcp(options.config, mcpConfigPaths(options.config.mcpConfigPath, userMcpPath)).catch(
+    (error) => {
+      console.warn("google workspace mcp config failed", error);
+    },
+  );
   const inFlight = new Set<string>();
   const hold = options.hold ?? holdSprite;
   syncLiveViewFile(options.config);

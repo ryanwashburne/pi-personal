@@ -27,6 +27,8 @@ test("CC Safety Net policy is valid JSON with deny-only extra paths", () => {
     ".pi/mcp.json",
     "~/.pi/agent/mcp.json",
     "/home/sprite/pi-personal/.env",
+    "~/.pi/agent/google-oauth.json",
+    "~/.pi/agent/google-oauth-pending.json",
   ]);
 });
 

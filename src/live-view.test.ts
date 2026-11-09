@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  dashboardPublicOrigin,
   liveViewFilePath,
   liveViewPromptNote,
   normalizeOrigin,
@@ -16,6 +17,18 @@ import {
 
 test("normalizeOrigin strips a trailing slash", () => {
   expect(normalizeOrigin("https://abc.sprites.app/")).toBe("https://abc.sprites.app");
+});
+
+test("dashboardPublicOrigin prefers SPRITE_URL then localhost", () => {
+  expect(
+    dashboardPublicOrigin(
+      { spriteUrl: "https://abc.sprites.app/" },
+      new Request("http://localhost/settings/s"),
+    ),
+  ).toBe("https://abc.sprites.app");
+  expect(
+    dashboardPublicOrigin({ spriteUrl: undefined }, new Request("http://localhost:8080/settings/s")),
+  ).toBe("http://localhost:8080");
 });
 
 test("originFromHeaders only accepts sprites.app hosts", () => {

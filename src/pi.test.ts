@@ -43,6 +43,10 @@ test("Pi workspace documents shared Chrome and the live view URL", () => {
   expect(system).toContain("chrome.md");
   expect(system).toContain("live-view.md");
   expect(system).toContain("fetch");
+  expect(system).toContain("mcp__gmail__*");
+  expect(system).toContain("mcp__calendar__*");
+  expect(system).toContain("mcp__drive__*");
+  expect(system).toContain("mcp__search__*");
   expect(agents).toContain("chrome.md");
   expect(agents).toContain("live-view.md");
   expect(chrome).toMatch(/live view URL/i);

@@ -58,3 +58,15 @@ test("loadConfig reads optional Tailscale exit-node settings", () => {
 test("loadConfig throws when required values are missing", () => {
   expect(() => loadConfig({ ...base, SENDBLUE_API_KEY_ID: "" })).toThrow("SENDBLUE_API_KEY_ID");
 });
+
+test("loadConfig reads optional Google OAuth client settings", () => {
+  const config = loadConfig({
+    ...base,
+    GOOGLE_OAUTH_CLIENT_ID: "client.apps.googleusercontent.com",
+    GOOGLE_OAUTH_CLIENT_SECRET: "client-secret",
+    GOOGLE_OAUTH_TOKEN_PATH: "/tmp/google-oauth.json",
+  });
+  expect(config.googleOAuthClientId).toBe("client.apps.googleusercontent.com");
+  expect(config.googleOAuthClientSecret).toBe("client-secret");
+  expect(config.googleOAuthTokenPath).toBe("/tmp/google-oauth.json");
+});

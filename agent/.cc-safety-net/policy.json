@@ -10,7 +10,9 @@
       "sessions",
       ".pi/mcp.json",
       "~/.pi/agent/mcp.json",
-      "/home/sprite/pi-personal/.env"
+      "/home/sprite/pi-personal/.env",
+      "~/.pi/agent/google-oauth.json",
+      "~/.pi/agent/google-oauth-pending.json"
     ]
   }
 }

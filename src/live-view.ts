@@ -28,6 +28,24 @@ export function normalizeOrigin(value: string | undefined): string | undefined {
   }
 }
 
+export function dashboardPublicOrigin(
+  config: Pick<Config, "spriteUrl">,
+  request: Request,
+): string | undefined {
+  const fromConfig = normalizeOrigin(config.spriteUrl);
+  if (fromConfig) return fromConfig;
+  const forwarded = originFromHeaders(request.headers);
+  if (forwarded) return forwarded;
+  try {
+    const origin = new URL(request.url).origin;
+    const host = new URL(origin).hostname;
+    if (host === "localhost" || host === "127.0.0.1") return origin;
+  } catch {
+    return undefined;
+  }
+  return undefined;
+}
+
 export function originFromHeaders(headers: Headers): string | undefined {
   const forwarded = headerValue(headers, "x-forwarded-host");
   const host = (forwarded ?? headerValue(headers, "host"))?.split(",")[0]?.trim();

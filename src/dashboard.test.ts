@@ -5,7 +5,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { BrowserSession } from "./browser-session";
 import type { Config } from "./config";
-import { browserViewerPath, dashboardPath } from "./dashboard";
+import { browserViewerPath, dashboardPath, googleOAuthCallbackPath } from "./dashboard";
+import { upsertGoogleMcpServers } from "./google-mcp";
+import { GOOGLE_AUTHORIZE_URL, writeGoogleTokens } from "./google-oauth";
 import { liveViewFilePath } from "./live-view";
 import { createDedupe } from "./dedupe";
 import { listMcpServers } from "./mcp-config";
@@ -61,12 +63,19 @@ function mockBrowser(dir: string): BrowserSession & { running: boolean; starts: 
   return session;
 }
 
-async function setup() {
+async function setup(overrides: Partial<Config> = {}) {
   const dir = await mkdtemp(join(tmpdir(), "pi-dashboard-"));
   const restarts: number[] = [];
   const browser = mockBrowser(dir);
   const gateway = await createGateway({
-    config: { ...config, agentCwd: dir, mcpConfigPath: join(dir, "mcp.json"), userMcpPath: join(dir, "user-mcp.json") },
+    config: {
+      ...config,
+      agentCwd: dir,
+      mcpConfigPath: join(dir, "mcp.json"),
+      userMcpPath: join(dir, "user-mcp.json"),
+      googleOAuthTokenPath: join(dir, "google-oauth.json"),
+      ...overrides,
+    },
     userMcpPath: join(dir, "missing-user-mcp.json"),
     sendblue: {
       async sendTyping() {},
@@ -108,6 +117,8 @@ test("serves HTML at the unguessable settings path", async () => {
   expect(result.status).toBe(200);
   expect(result.headers?.["content-type"]).toContain("text/html");
   expect(result.body).toContain("Add HTTP MCP");
+  expect(result.body).toContain("Google Workspace");
+  expect(result.body).toContain("missing — set GOOGLE_OAUTH_CLIENT_ID");
   expect(result.body).toContain("Playwright is always on");
   expect(result.body).toContain("Open live view");
   expect(result.body).toContain("Paste (⌘V / Ctrl+V)");
@@ -152,7 +163,7 @@ test("adds an HTTP MCP server from the form and restarts Pi", async () => {
       method: "POST",
       body: new URLSearchParams({
         action: "add",
-        name: "calendar",
+        name: "notes",
         url: "https://mcp.example.com/mcp",
         token: "tok_123",
       }),
@@ -163,7 +174,7 @@ test("adds an HTTP MCP server from the form and restarts Pi", async () => {
   expect(restarts).toHaveLength(1);
   expect(await listMcpServers(mcpPath)).toEqual([
     {
-      name: "calendar",
+      name: "notes",
       kind: "http",
       target: "https://mcp.example.com/mcp",
       hasAuth: true,
@@ -171,7 +182,7 @@ test("adds an HTTP MCP server from the form and restarts Pi", async () => {
   ]);
   expect(await listMcpServers(userPath)).toEqual([
     {
-      name: "calendar",
+      name: "notes",
       kind: "http",
       target: "https://mcp.example.com/mcp",
       hasAuth: true,
@@ -399,3 +410,131 @@ test("rejects reserving the playwright MCP name for an HTTP server", async () =>
   expect(restarts).toHaveLength(0);
   expect(await listMcpServers(mcpPath)).toEqual([]);
 });
+
+test("rejects reserving Google Workspace MCP names on the add form", async () => {
+  const { gateway, restarts, mcpPath } = await setup();
+  const path = dashboardPath(config);
+  if (!path) throw new Error("dashboard path missing");
+  const posted = await gateway.handle(
+    dash(path, {
+      method: "POST",
+      body: new URLSearchParams({
+        action: "add",
+        name: "gmail",
+        url: "https://example.com/mcp",
+      }),
+    }),
+  );
+  expect(posted.headers?.Location).toContain("error=");
+  expect(restarts).toHaveLength(0);
+  expect(await listMcpServers(mcpPath)).toEqual([]);
+});
+
+test("Connect Google redirects to Google OAuth with the settings callback", async () => {
+  const { gateway, dir } = await setup({
+    spriteUrl: "https://abc.sprites.app",
+    googleOAuthClientId: "client.apps.googleusercontent.com",
+    googleOAuthClientSecret: "client-secret",
+  });
+  const path = dashboardPath(config);
+  if (!path) throw new Error("dashboard path missing");
+  const page = await gateway.handle(dash(path));
+  expect(page.body).toContain("https://abc.sprites.app/settings/dash-secret/google/callback");
+  expect(page.body).toContain("Connect Google");
+  expect(page.body).not.toContain("client-secret");
+
+  const posted = await gateway.handle(
+    dash(path, {
+      method: "POST",
+      body: new URLSearchParams({ action: "google-connect" }),
+    }),
+  );
+  expect(posted.status).toBe(303);
+  const location = posted.headers?.Location ?? "";
+  expect(location.startsWith(GOOGLE_AUTHORIZE_URL)).toBe(true);
+  const url = new URL(location);
+  expect(url.searchParams.get("redirect_uri")).toBe("https://abc.sprites.app/settings/dash-secret/google/callback");
+  expect(url.searchParams.get("client_id")).toBe("client.apps.googleusercontent.com");
+  expect(url.searchParams.get("access_type")).toBe("offline");
+  const pending = JSON.parse(await Bun.file(join(dir, "google-oauth-pending.json")).text()) as { state: string };
+  expect(url.searchParams.get("state")).toBe(pending.state);
+});
+
+test("Google OAuth callback writes MCP servers and restarts Pi", async () => {
+  const { gateway, restarts, mcpPath, dir } = await setup({
+    spriteUrl: "https://abc.sprites.app",
+    googleOAuthClientId: "client.apps.googleusercontent.com",
+    googleOAuthClientSecret: "client-secret",
+  });
+  const path = dashboardPath(config);
+  const callback = googleOAuthCallbackPath(config);
+  if (!path || !callback) throw new Error("dashboard path missing");
+  const started = await gateway.handle(
+    dash(path, {
+      method: "POST",
+      body: new URLSearchParams({ action: "google-connect" }),
+    }),
+  );
+  const state = new URL(started.headers?.Location ?? "").searchParams.get("state");
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () =>
+    new Response(
+      JSON.stringify({
+        access_token: "ya29.access",
+        refresh_token: "1//refresh",
+        expires_in: 3600,
+        token_type: "Bearer",
+      }),
+      { status: 200, headers: { "content-type": "application/json" } },
+    )) as unknown as typeof fetch;
+  try {
+    const finished = await gateway.handle(dash(`${callback}?code=auth-code&state=${state}`));
+    expect(finished.status).toBe(303);
+    expect(finished.headers?.Location).toContain("notice=");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+  expect(restarts.length).toBeGreaterThan(0);
+  expect((await listMcpServers(mcpPath)).map((server) => server.name)).toEqual([
+    "gmail",
+    "calendar",
+    "drive",
+    "search",
+  ]);
+  const tokens = JSON.parse(await Bun.file(join(dir, "google-oauth.json")).text()) as { refreshToken: string };
+  expect(tokens.refreshToken).toBe("1//refresh");
+
+  const page = await gateway.handle(dash(path));
+  expect(page.body).toContain(">connected<");
+  expect(page.body).toContain("Disconnect");
+  expect(page.body).toContain("gmailmcp.googleapis.com");
+  expect(page.body).toContain("workspacemcp.googleapis.com");
+  expect(page.body).toContain("mcp__search__*");
+  expect(page.body).not.toContain("1//refresh");
+  expect(page.body).not.toContain("ya29.access");
+});
+
+test("Disconnect Google removes MCP servers and tokens", async () => {
+  const { gateway, mcpPath, dir } = await setup({
+    spriteUrl: "https://abc.sprites.app",
+    googleOAuthClientId: "client.apps.googleusercontent.com",
+    googleOAuthClientSecret: "client-secret",
+  });
+  const path = dashboardPath(config);
+  if (!path) throw new Error("dashboard path missing");
+  await writeGoogleTokens(join(dir, "google-oauth.json"), {
+    accessToken: "ya29.access",
+    refreshToken: "1//refresh",
+    expiresAt: Date.now() + 60 * 60_000,
+  });
+  await upsertGoogleMcpServers([mcpPath], "/bin/echo Bearer tok");
+  await gateway.handle(
+    dash(path, {
+      method: "POST",
+      body: new URLSearchParams({ action: "google-disconnect" }),
+    }),
+  );
+  expect(await listMcpServers(mcpPath)).toEqual([]);
+  expect(await Bun.file(join(dir, "google-oauth.json")).exists()).toBe(false);
+});
+

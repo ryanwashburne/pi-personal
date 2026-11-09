@@ -2,13 +2,28 @@ import { spawn } from "node:child_process";
 import type { BrowserSession, BrowserStatus } from "./browser-session";
 import { BROWSER_CDP_PORT, browserProfileDir } from "./browser-session";
 import type { Config } from "./config";
-import { syncLiveViewFile } from "./live-view";
+import {
+  GOOGLE_OAUTH_SCOPES,
+  completeGoogleOAuth,
+  disconnectGoogleOAuth,
+  startGoogleOAuth,
+} from "./google-oauth";
+import {
+  googleOAuthClientFromConfig,
+  googleWorkspaceStatus,
+  removeGoogleMcpServers,
+  syncGoogleWorkspaceMcp,
+} from "./google-mcp";
+import { dashboardPublicOrigin, syncLiveViewFile } from "./live-view";
 import {
   addHttpMcpServers,
   isBuiltinMcpServer,
+  isGoogleMcpServer,
+  isReservedMcpName,
   listMcpServersFrom,
   mcpConfigPaths,
   removeMcpServers,
+  reservedMcpNameError,
   validateMcpName,
   validateMcpUrl,
   type ListedMcpServer,
@@ -39,6 +54,20 @@ export function browserWsPath(config: Pick<Config, "dashboardPathSecret">): stri
   return path ? `${path}/browser/ws` : undefined;
 }
 
+export function googleOAuthCallbackPath(config: Pick<Config, "dashboardPathSecret">): string | undefined {
+  const path = dashboardPath(config);
+  return path ? `${path}/google/callback` : undefined;
+}
+
+export function googleOAuthRedirectUri(
+  config: Pick<Config, "dashboardPathSecret" | "spriteUrl">,
+  origin: string | undefined,
+): string | undefined {
+  const callback = googleOAuthCallbackPath(config);
+  if (!origin || !callback) return undefined;
+  return `${origin}${callback}`;
+}
+
 export function isDashboardPath(pathname: string, path: string): boolean {
   return pathname === path || pathname.startsWith(`${path}/`);
 }
@@ -56,8 +85,13 @@ export async function handleDashboard(
 
   const viewerPath = `${path}/browser`;
   const wsPath = `${path}/browser/ws`;
+  const googleCallbackPath = `${path}/google/callback`;
   if (url.pathname === wsPath) {
     return { status: 426, body: "websocket required" };
+  }
+  if (url.pathname === googleCallbackPath) {
+    if (request.method !== "GET") return { status: 405, body: "method not allowed" };
+    return handleGoogleCallback(request, options, path);
   }
   if (url.pathname !== path && url.pathname !== viewerPath) {
     return { status: 404, body: "not found" };
@@ -67,7 +101,7 @@ export async function handleDashboard(
     if (url.pathname === viewerPath) {
       return renderViewer(options, path, url.searchParams.get("notice"), url.searchParams.get("error"));
     }
-    return render(options, url.searchParams.get("notice"), url.searchParams.get("error"));
+    return render(options, request, url.searchParams.get("notice"), url.searchParams.get("error"));
   }
   if (request.method !== "POST") {
     return { status: 405, body: "method not allowed" };
@@ -91,8 +125,8 @@ export async function handleDashboard(
       const bearerToken = String(form.get("token") ?? "");
       const nameError = validateMcpName(name);
       if (nameError) return redirect(path, undefined, nameError);
-      if (isBuiltinMcpServer(name)) {
-        return redirect(path, undefined, "Name playwright is reserved for Sprite Chromium.");
+      if (isReservedMcpName(name)) {
+        return redirect(path, undefined, reservedMcpNameError(name));
       }
       const urlError = validateMcpUrl(mcpUrl);
       if (urlError) return redirect(path, undefined, urlError);
@@ -112,6 +146,9 @@ export async function handleDashboard(
       const name = String(form.get("name") ?? "");
       if (isBuiltinMcpServer(name)) {
         return redirect(path, undefined, "Playwright is built in so Pi can drive the Sprite browser.");
+      }
+      if (isGoogleMcpServer(name)) {
+        return redirect(path, undefined, "Use Disconnect under Google Workspace.");
       }
       try {
         const removed = await removeMcpServers(configMcpPaths(options.config), name);
@@ -140,6 +177,12 @@ export async function handleDashboard(
       }
       return redirect(returnTo, "Browser stopped. Cookies stay on disk.");
     }
+    case "google-connect": {
+      return startGoogleConnect(request, options, path);
+    }
+    case "google-disconnect": {
+      return disconnectGoogle(options, path);
+    }
     default: {
       const _exhaustive: never = action;
       return redirect(returnTo, undefined, `Unknown action: ${_exhaustive}`);
@@ -147,13 +190,88 @@ export async function handleDashboard(
   }
 }
 
-type DashboardAction = "add" | "remove" | "browser-start" | "browser-stop";
+type DashboardAction =
+  | "add"
+  | "remove"
+  | "browser-start"
+  | "browser-stop"
+  | "google-connect"
+  | "google-disconnect";
 
 function parseAction(value: string): DashboardAction | undefined {
-  if (value === "add" || value === "remove" || value === "browser-start" || value === "browser-stop") {
+  if (
+    value === "add" ||
+    value === "remove" ||
+    value === "browser-start" ||
+    value === "browser-stop" ||
+    value === "google-connect" ||
+    value === "google-disconnect"
+  ) {
     return value;
   }
   return undefined;
+}
+
+async function startGoogleConnect(
+  request: Request,
+  options: DashboardOptions,
+  path: string,
+): Promise<GatewayResult> {
+  const client = googleOAuthClientFromConfig(options.config);
+  if (!client) {
+    return redirect(path, undefined, "Set GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET in .env, then re-run provision.");
+  }
+  const origin = dashboardPublicOrigin(options.config, request);
+  const redirectUri = googleOAuthRedirectUri(options.config, origin);
+  if (!redirectUri) {
+    return redirect(path, undefined, "Set SPRITE_URL so Google can redirect back to this settings page.");
+  }
+  try {
+    const started = await startGoogleOAuth(client, redirectUri);
+    return {
+      status: 303,
+      body: "",
+      headers: { Location: started.authorizeUrl },
+    };
+  } catch (error) {
+    return redirect(path, undefined, error instanceof Error ? error.message : String(error));
+  }
+}
+
+async function handleGoogleCallback(
+  request: Request,
+  options: DashboardOptions,
+  path: string,
+): Promise<GatewayResult> {
+  const client = googleOAuthClientFromConfig(options.config);
+  if (!client) {
+    return redirect(path, undefined, "Set GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET in .env, then re-run provision.");
+  }
+  const url = new URL(request.url);
+  try {
+    await completeGoogleOAuth(client, {
+      code: url.searchParams.get("code"),
+      state: url.searchParams.get("state"),
+      error: url.searchParams.get("error"),
+    });
+    await syncGoogleWorkspaceMcp(options.config);
+    await options.pi.restart();
+  } catch (error) {
+    return redirect(path, undefined, error instanceof Error ? error.message : String(error));
+  }
+  return redirect(path, "Google Workspace connected. Pi will use Gmail, Calendar, Drive, and Universal Search on the next text.");
+}
+
+async function disconnectGoogle(options: DashboardOptions, path: string): Promise<GatewayResult> {
+  const client = googleOAuthClientFromConfig(options.config);
+  try {
+    if (client) await disconnectGoogleOAuth(client);
+    await removeGoogleMcpServers(configMcpPaths(options.config));
+    await options.pi.restart();
+  } catch (error) {
+    return redirect(path, undefined, error instanceof Error ? error.message : String(error));
+  }
+  return redirect(path, "Disconnected Google Workspace.");
 }
 
 function shortFlash(message: string): string {
@@ -174,6 +292,7 @@ function redirect(path: string, notice?: string, error?: string): GatewayResult 
 
 async function render(
   options: DashboardOptions,
+  request: Request,
   notice: string | null,
   error: string | null,
 ): Promise<GatewayResult> {
@@ -188,10 +307,15 @@ async function render(
   const mcpStatus = await probePiMcp(options.config);
   const browser = browserStatus(options);
   const tailscale = tailscaleStatus(options);
+  const google = await googleWorkspaceStatus(options.config);
+  const redirectUri = googleOAuthRedirectUri(
+    options.config,
+    dashboardPublicOrigin(options.config, request),
+  );
 
   return {
     status: 200,
-    body: page(options.config, servers, notice, loadError, mcpStatus, browser, tailscale),
+    body: page(options.config, servers, notice, loadError, mcpStatus, browser, tailscale, google, redirectUri),
     headers: {
       "content-type": "text/html; charset=utf-8",
       "cache-control": "no-store",
@@ -243,6 +367,8 @@ function page(
   mcpStatus: string | undefined,
   browser: BrowserStatus,
   tailscale: TailscaleStatus,
+  google: { configured: boolean; connected: boolean },
+  redirectUri: string | undefined,
 ): string {
   const model = config.piModel ?? "Pi default";
   const provider = config.piProvider ?? "Pi default";
@@ -299,6 +425,8 @@ function page(
 
     ${tailscaleSection(tailscale)}
 
+    ${googleSection(google, redirectUri)}
+
     <h2>MCP servers</h2>
     ${mcpStatus ? `<pre class="status">${escapeHtml(mcpStatus)}</pre>` : `<p class="hint">Could not run <code>pi mcp list</code> yet. After provision, this block shows whether Pi connected and which <code>mcp__*</code> tools it loaded.</p>`}
     <table>
@@ -311,7 +439,7 @@ function page(
     <form class="stack" method="post">
       <input type="hidden" name="action" value="add">
       <label>Name
-        <input name="name" required maxlength="64" pattern="[A-Za-z0-9][A-Za-z0-9_-]*" placeholder="calendar">
+        <input name="name" required maxlength="64" pattern="[A-Za-z0-9][A-Za-z0-9_-]*" placeholder="docs">
       </label>
       <label>MCP URL
         <input name="url" required type="url" placeholder="https://example.com/mcp">
@@ -362,6 +490,46 @@ function browserSection(config: Config, browser: BrowserStatus): string {
       <a href="${escapeHtml(viewer)}">Open live view</a>
     </p>
     <p class="hint">The live view streams this Chromium into this site. Paste (⌘V / Ctrl+V) works there — never text passwords. Keep that tab open while you log in so the Sprite stays awake. An agent-started browser does not hold the Sprite after the reply.</p>`;
+}
+
+function googleSection(
+  google: { configured: boolean; connected: boolean },
+  redirectUri: string | undefined,
+): string {
+  const state = !google.configured ? "not configured" : google.connected ? "connected" : "not connected";
+  const redirect = redirectUri
+    ? `<tr><th>Redirect URI</th><td><code>${escapeHtml(redirectUri)}</code></td></tr>`
+    : `<tr><th>Redirect URI</th><td>Set SPRITE_URL so this page can show the callback Google should use.</td></tr>`;
+  const actions = google.configured
+    ? `<p>
+      ${
+        google.connected
+          ? ""
+          : `<form class="row-form" method="post">
+        <input type="hidden" name="action" value="google-connect">
+        <button type="submit">Connect Google</button>
+      </form>`
+      }
+      ${
+        google.connected
+          ? `<form class="row-form" method="post">
+        <input type="hidden" name="action" value="google-disconnect">
+        <button type="submit">Disconnect</button>
+      </form>`
+          : ""
+      }
+    </p>`
+    : "";
+  return `
+    <h2>Google Workspace</h2>
+    <p class="lede">Official Gmail, Calendar, Drive, and Universal Search MCP servers. Sign in here once; Pi then calls them as <code>mcp__gmail__*</code>, <code>mcp__calendar__*</code>, <code>mcp__drive__*</code>, and <code>mcp__search__*</code>. Tokens stay on the Sprite, not in git.</p>
+    <table>
+      <tr><th>Client</th><td>${google.configured ? "set" : "missing — set GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET"}</td></tr>
+      <tr><th>Status</th><td>${escapeHtml(state)}</td></tr>
+      ${redirect}
+    </table>
+    ${actions}
+    <p class="hint">In Google Cloud: enable Gmail, Calendar, Drive APIs and their MCP APIs, plus <strong>Google Workspace MCP API</strong> (<code>workspacemcp.googleapis.com</code>); create a <strong>Web application</strong> OAuth client; check <strong>Use this client for an AI-powered agent</strong>; add the redirect URI above; paste the client ID/secret into <code>.env</code> and re-run <code>./scripts/provision.sh</code>. Consent-screen scopes: ${GOOGLE_OAUTH_SCOPES.map((scope) => `<code>${escapeHtml(scope)}</code>`).join(" ")}. Join the Workspace developer preview if Google still refuses MCP calls. Gmail MCP drafts mail and does not send it. Universal Search also reads Chat when those scopes are granted.</p>`;
 }
 
 function tailscaleSection(tailscale: TailscaleStatus): string {
@@ -522,13 +690,14 @@ function viewerScript(wsPath: string): string {
 
 function serverRow(server: ListedMcpServer): string {
   const builtin = isBuiltinMcpServer(server.name);
+  const google = isGoogleMcpServer(server.name);
   return `<tr>
     <td><code>${escapeHtml(server.name)}</code></td>
     <td><code>${escapeHtml(server.target)}</code></td>
-    <td>${builtin ? "built-in" : server.hasAuth ? "yes" : "no"}</td>
+    <td>${builtin ? "built-in" : google ? "google" : server.hasAuth ? "yes" : "no"}</td>
     <td>
       ${
-        builtin
+        builtin || google
           ? ""
           : `<form class="row-form" method="post">
         <input type="hidden" name="action" value="remove">

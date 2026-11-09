@@ -28,20 +28,20 @@ test("rejects a bad MCP server name", () => {
 test("adds an HTTP MCP server with a bearer token", async () => {
   const path = await tempMcp();
   await addHttpMcpServer(path, {
-    name: "calendar",
+    name: "notes",
     url: "https://example.com/mcp",
     bearerToken: "secret-token",
   });
   const listed = await listMcpServers(path);
   expect(listed).toEqual([
-    { name: "calendar", kind: "http", target: "https://example.com/mcp", hasAuth: true },
+    { name: "notes", kind: "http", target: "https://example.com/mcp", hasAuth: true },
   ]);
   const raw = JSON.parse(await readFile(path, "utf8")) as {
-    mcpServers: { calendar: { type?: string; exposure?: string; headers?: { Authorization?: string } } };
+    mcpServers: { notes: { type?: string; exposure?: string; headers?: { Authorization?: string } } };
   };
-  expect(raw.mcpServers.calendar.type).toBe("http");
-  expect(raw.mcpServers.calendar.exposure).toBe("direct");
-  expect(raw.mcpServers.calendar.headers?.Authorization).toBe("Bearer secret-token");
+  expect(raw.mcpServers.notes.type).toBe("http");
+  expect(raw.mcpServers.notes.exposure).toBe("direct");
+  expect(raw.mcpServers.notes.headers?.Authorization).toBe("Bearer secret-token");
 });
 
 test("copies user-level MCP config into the project file when the project is empty", async () => {
@@ -81,10 +81,10 @@ test("does not overwrite a project MCP file that already has servers", async () 
   const userPath = join(dir, "user.json");
   const projectPath = join(dir, "project.json");
   await addHttpMcpServer(userPath, { name: "docs", url: "https://docs.example/mcp" });
-  await addHttpMcpServer(projectPath, { name: "calendar", url: "https://cal.example/mcp" });
+  await addHttpMcpServer(projectPath, { name: "notes", url: "https://notes.example/mcp" });
   expect(await migrateUserMcpToProject(projectPath, userPath)).toBe(false);
   expect(await listMcpServers(projectPath)).toEqual([
-    { name: "calendar", kind: "http", target: "https://cal.example/mcp", hasAuth: false },
+    { name: "notes", kind: "http", target: "https://notes.example/mcp", hasAuth: false },
   ]);
 });
 
@@ -115,4 +115,35 @@ test("upserts a stdio Playwright MCP server and refuses to remove it", async () 
   await expect(
     addHttpMcpServer(path, { name: BROWSER_MCP_NAME, url: "https://example.com/mcp" }),
   ).rejects.toThrow(/reserved/);
+});
+
+test("reserves Google Workspace MCP names unless allowReserved is set", async () => {
+  const path = await tempMcp();
+  await expect(addHttpMcpServer(path, { name: "gmail", url: "https://example.com/mcp" })).rejects.toThrow(
+    /reserved/,
+  );
+  await expect(addHttpMcpServer(path, { name: "search", url: "https://example.com/mcp" })).rejects.toThrow(
+    /reserved/,
+  );
+  await addHttpMcpServer(path, {
+    name: "gmail",
+    url: "https://gmailmcp.googleapis.com/mcp/v1",
+    description: "Gmail MCP",
+    authorizationCommand: "/bin/echo Bearer token",
+    allowReserved: true,
+  });
+  const listed = await listMcpServers(path);
+  expect(listed).toEqual([
+    {
+      name: "gmail",
+      kind: "http",
+      target: "https://gmailmcp.googleapis.com/mcp/v1",
+      hasAuth: true,
+    },
+  ]);
+  const raw = JSON.parse(await readFile(path, "utf8")) as {
+    mcpServers: { gmail: { description?: string; headers?: { Authorization?: string } } };
+  };
+  expect(raw.mcpServers.gmail.description).toBe("Gmail MCP");
+  expect(raw.mcpServers.gmail.headers?.Authorization).toBe("!/bin/echo Bearer token");
 });
