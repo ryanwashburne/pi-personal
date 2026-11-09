@@ -80,6 +80,9 @@ sprite exec -- bash "$REMOTE_APP/scripts/install-browser-deps.sh"
 echo "Installing Tailscale client if needed..."
 sprite exec -- bash "$REMOTE_APP/scripts/install-tailscale.sh"
 
+echo "Installing CC Safety Net into Pi (blocks .env, SSH keys, and extra deny paths)..."
+sprite exec -- bash -lc "pi install npm:cc-safety-net"
+
 echo "Making the Sprite URL public so Sendblue can reach it..."
 sprite config update --url-auth public
 
