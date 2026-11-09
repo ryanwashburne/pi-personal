@@ -78,13 +78,12 @@ export async function openrouterSpend(
     return { ok: false, vendor: "openrouter", error: "OPENROUTER_API_KEY is not set." };
   }
 
-  const response = await request(fetchFn, "https://openrouter.ai/api/v1/key", {
-    headers: { Authorization: `Bearer ${key}`, Accept: "application/json" },
-  });
+  const headers = { Authorization: `Bearer ${key}`, Accept: "application/json" };
+  const response = await request(fetchFn, "https://openrouter.ai/api/v1/key", { headers });
   if (!response.ok) return { ...response, vendor: "openrouter" };
 
   const data = (response.body as { data?: Record<string, unknown> }).data ?? {};
-  return {
+  const result: Record<string, unknown> = {
     ok: true,
     vendor: "openrouter",
     usageUsd: numberOrNull(data.usage),
@@ -94,8 +93,22 @@ export async function openrouterSpend(
     limitUsd: numberOrNull(data.limit),
     limitRemainingUsd: numberOrNull(data.limit_remaining),
     limitReset: typeof data.limit_reset === "string" ? data.limit_reset : null,
-    note: "This OpenRouter key’s usage. Lifetime credits need a management key (GET /credits) and are not queried here.",
+    note: "This app’s model bill is OpenRouter, not a direct Anthropic key. Figures are this API key’s usage.",
   };
+
+  const credits = await request(fetchFn, "https://openrouter.ai/api/v1/credits", { headers });
+  if (credits.ok) {
+    const creditData = (credits.body as { data?: Record<string, unknown> }).data ?? {};
+    const totalCredits = numberOrNull(creditData.total_credits);
+    const totalUsage = numberOrNull(creditData.total_usage);
+    result.totalCreditsUsd = totalCredits;
+    result.totalUsageUsd = totalUsage;
+    if (totalCredits !== null && totalUsage !== null) {
+      result.creditsRemainingUsd = totalCredits - totalUsage;
+    }
+  }
+
+  return result as VendorStatus;
 }
 
 export async function anthropicOrgSpend(
@@ -109,7 +122,7 @@ export async function anthropicOrgSpend(
       ok: false,
       vendor: "anthropic",
       error:
-        "No ANTHROPIC_ADMIN_API_KEY or ANTHROPIC_API_KEY in env. Org cost_report needs an Admin key (sk-ant-admin01-…) or an unscoped personal key. This agent’s own tokens are in the model section from session files.",
+        "This app bills models through OpenRouter. Org cost_report needs ANTHROPIC_ADMIN_API_KEY (sk-ant-admin01-…) and is not this Sprite’s invoice. This agent’s own tokens are in the model and openrouter sections.",
     };
   }
 
@@ -165,7 +178,7 @@ export async function anthropicOrgSpend(
     byModel: [...byModel.entries()]
       .sort((a, b) => b[1] - a[1])
       .map(([model, amount]) => ({ model, usd: amount })),
-    note: "Anthropic org cost_report. Includes every key in the org, not just this Sprite. Amounts converted from cents.",
+    note: "Anthropic org cost_report. Not this app’s model bill (that is OpenRouter). Includes every key in the org. Amounts converted from cents.",
   };
 }
 

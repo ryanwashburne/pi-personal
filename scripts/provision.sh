@@ -164,7 +164,7 @@ fi
 echo
 echo "If Pi is not authenticated yet:"
 echo "  sprite console -s $SPRITE_NAME"
-echo "  pi auth login anthropic --api-key"
+echo "  pi auth login openrouter --api-key"
 echo
 echo "Then text $SENDBLUE_FROM_NUMBER from $ALLOWED_PHONE."
 echo "Watch logs with: sprite exec -- tail -f /.sprite/logs/services/gateway.log"

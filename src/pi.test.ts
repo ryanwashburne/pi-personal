@@ -73,6 +73,9 @@ test("Pi workspace documents spend", () => {
   expect(cost).toMatch(/Sprite/i);
   expect(cost).toContain("`spend`");
   expect(cost).toMatch(/do not invent/i);
+  expect(cost).toMatch(/This app’s model path/);
+  expect(cost).not.toMatch(/Prefer a direct `ANTHROPIC_API_KEY`/);
+  expect(system).toMatch(/OpenRouter/);
 });
 
 function rpcLog(dir: string): Array<{ type?: string; message?: string; streamingBehavior?: string }> {

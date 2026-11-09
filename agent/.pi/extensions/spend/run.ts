@@ -57,7 +57,9 @@ export async function runSpend(vendor: SpendVendor, deps: SpendDeps = {}): Promi
   }
   if (include("sendblue")) report.sendblue = await sendblueSpend(env, fetchFn);
   if (include("openrouter")) report.openrouter = await openrouterSpend(env, fetchFn);
-  if (include("anthropic")) report.anthropic = await anthropicOrgSpend(env, fetchFn, now);
+  // Anthropic org cost_report is not this app's bill (models go through OpenRouter).
+  // Only query it when the owner asked for that vendor explicitly.
+  if (vendor === "anthropic") report.anthropic = await anthropicOrgSpend(env, fetchFn, now);
   if (include("fly")) report.fly = flySpend();
 
   report.summary = summarize(report);

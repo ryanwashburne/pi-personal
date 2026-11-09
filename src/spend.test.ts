@@ -129,6 +129,9 @@ test("runSpend sendblue redacts phones and does not treat usage as dollars", asy
 
 test("runSpend openrouter maps key usage fields", async () => {
   const fetchFn = async (url: string) => {
+    if (url.includes("/credits")) {
+      return new Response(JSON.stringify({ error: { code: 403, message: "management key" } }), { status: 403 });
+    }
     expect(url).toContain("/api/v1/key");
     return new Response(
       JSON.stringify({
@@ -147,8 +150,34 @@ test("runSpend openrouter maps key usage fields", async () => {
     usageMonthlyUsd: 3.2,
     limitRemainingUsd: 74.5,
   });
+  expect(report.openrouter && report.openrouter.ok ? report.openrouter.totalCreditsUsd : undefined).toBeUndefined();
   expect(JSON.stringify(report)).not.toContain("sk-or-v1-secret");
   expect(JSON.stringify(report)).not.toContain("sk-or-v1-test");
+});
+
+test("runSpend openrouter includes credits remaining when GET /credits is allowed", async () => {
+  const fetchFn = async (url: string) => {
+    if (url.includes("/credits")) {
+      return new Response(JSON.stringify({ data: { total_credits: 50, total_usage: 12.5 } }), { status: 200 });
+    }
+    return new Response(JSON.stringify({ data: { usage: 12.5, usage_monthly: 12.5 } }), { status: 200 });
+  };
+  const report = await runSpend("openrouter", {
+    env: { OPENROUTER_API_KEY: "sk-or-v1-test" },
+    fetchFn,
+  });
+  expect(report.openrouter).toMatchObject({
+    ok: true,
+    totalCreditsUsd: 50,
+    totalUsageUsd: 12.5,
+    creditsRemainingUsd: 37.5,
+  });
+});
+
+test("runSpend vendor=anthropic without keys does not invent a total", async () => {
+  const report = await runSpend("anthropic", { env: {}, fetchFn: async () => new Response("no", { status: 500 }) });
+  expect(report.anthropic).toMatchObject({ ok: false });
+  expect(JSON.stringify(report.anthropic)).toMatch(/OpenRouter/);
 });
 
 test("runSpend anthropic converts cents strings and is org-wide", async () => {
@@ -180,13 +209,18 @@ test("runSpend anthropic converts cents strings and is org-wide", async () => {
 });
 
 test("runSpend skips vendors with no keys instead of inventing amounts", async () => {
-  const report = await runSpend("all", { env: {}, sessionTexts: [], fetchFn: async () => new Response("no", { status: 500 }) });
+  const report = await runSpend("all", {
+    env: { ANTHROPIC_API_KEY: "sk-ant-unused" },
+    sessionTexts: [],
+    fetchFn: async () => new Response("no", { status: 500 }),
+  });
   expect(report.model?.usd).toBe(0);
   expect(report.sendblue).toMatchObject({ ok: false });
   expect(report.openrouter).toMatchObject({ ok: false });
-  expect(report.anthropic).toMatchObject({ ok: false });
+  expect(report.anthropic).toBeUndefined();
   expect(report.fly).toMatchObject({ ok: false, vendor: "fly" });
   expect(report.summary).toMatch(/no billing API/i);
+  expect(report.summary).not.toMatch(/Anthropic/);
 });
 
 test("summarizeSessionTexts reads jsonl from a session directory", () => {
