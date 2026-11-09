@@ -46,12 +46,14 @@ echo "Uploading gateway and agent files..."
 sprite exec -- mkdir -p "$REMOTE_APP" "$REMOTE_AGENT"
 sprite exec -- bash -lc "if [ -f $REMOTE_AGENT/.pi/mcp.json ]; then cp $REMOTE_AGENT/.pi/mcp.json /tmp/pi-personal-mcp.json; fi"
 sprite exec -- bash -lc "if [ -f /home/sprite/.pi/agent/mcp.json ]; then cp /home/sprite/.pi/agent/mcp.json /tmp/pi-personal-user-mcp.json; fi"
+sprite exec -- bash -lc "if [ -d $REMOTE_AGENT/browser-profile ]; then rm -rf /tmp/pi-personal-browser-profile; cp -a $REMOTE_AGENT/browser-profile /tmp/pi-personal-browser-profile; fi"
 tar -czf - \
   --exclude .git \
   --exclude node_modules \
   --exclude .env \
   --exclude agent/sessions \
   --exclude agent/state \
+  --exclude agent/browser-profile \
   src package.json tsconfig.json agent scripts README.md |
   sprite exec -- tar -xzf - -C "$REMOTE_APP"
 
@@ -61,9 +63,24 @@ if [ -f /tmp/pi-personal-mcp.json ]; then mv /tmp/pi-personal-mcp.json $REMOTE_A
 if [ -f /tmp/pi-personal-user-mcp.json ]; then mv /tmp/pi-personal-user-mcp.json /home/sprite/.pi/agent/mcp.json; fi
 has_mcp() { grep -Eq '\"(url|command)\"' \"\$1\" 2>/dev/null; }
 if has_mcp $REMOTE_AGENT/.pi/mcp.json && ! has_mcp /home/sprite/.pi/agent/mcp.json; then cp $REMOTE_AGENT/.pi/mcp.json /home/sprite/.pi/agent/mcp.json; fi
-if has_mcp /home/sprite/.pi/agent/mcp.json && ! has_mcp $REMOTE_AGENT/.pi/mcp.json; then cp /home/sprite/.pi/agent/mcp.json $REMOTE_AGENT/.pi/mcp.json; fi"
+if has_mcp /home/sprite/.pi/agent/mcp.json && ! has_mcp $REMOTE_AGENT/.pi/mcp.json; then cp /home/sprite/.pi/agent/mcp.json $REMOTE_AGENT/.pi/mcp.json; fi
+if [ -d /tmp/pi-personal-browser-profile ]; then rm -rf $REMOTE_AGENT/browser-profile; mv /tmp/pi-personal-browser-profile $REMOTE_AGENT/browser-profile; fi"
 sprite exec -- bash -lc "cat > $REMOTE_APP/.env" < .env
 sprite exec -- bash -lc "grep -q AGENT_CWD= $REMOTE_APP/.env || echo AGENT_CWD=$REMOTE_AGENT >> $REMOTE_APP/.env"
+
+echo "Installing browser packages if needed..."
+sprite exec -- bash -lc 'if command -v Xvfb >/dev/null && command -v x11vnc >/dev/null && { command -v chromium >/dev/null || command -v chromium-browser >/dev/null || command -v google-chrome >/dev/null; }; then
+  echo "browser deps already present"
+  exit 0
+fi
+if ! command -v sudo >/dev/null; then
+  echo "sudo not available; install xvfb, x11vnc, and chromium on the Sprite by hand." >&2
+  exit 0
+fi
+sudo apt-get update -qq
+sudo DEBIAN_FRONTEND=noninteractive apt-get install -y xvfb x11vnc fonts-liberation fonts-noto-color-emoji dbus-x11
+sudo DEBIAN_FRONTEND=noninteractive apt-get install -y chromium || sudo DEBIAN_FRONTEND=noninteractive apt-get install -y chromium-browser
+'
 
 echo "Installing gateway as a Sprite service..."
 sprite exec -- bash -lc "sprite-env services get gateway >/dev/null 2>&1 && sprite-env services delete gateway || true"

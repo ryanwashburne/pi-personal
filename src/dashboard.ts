@@ -1,4 +1,6 @@
 import { spawn } from "node:child_process";
+import type { BrowserSession, BrowserStatus } from "./browser-session";
+import { BROWSER_CDP_PORT, browserProfileDir } from "./browser-session";
 import type { Config } from "./config";
 import {
   addHttpMcpServers,
@@ -15,11 +17,26 @@ import type { GatewayResult } from "./result";
 type DashboardOptions = {
   config: Config;
   pi: PiAgent;
+  browser?: BrowserSession;
 };
 
 export function dashboardPath(config: Pick<Config, "dashboardPathSecret">): string | undefined {
   if (!config.dashboardPathSecret) return undefined;
   return `/settings/${config.dashboardPathSecret}`;
+}
+
+export function browserViewerPath(config: Pick<Config, "dashboardPathSecret">): string | undefined {
+  const path = dashboardPath(config);
+  return path ? `${path}/browser` : undefined;
+}
+
+export function browserWsPath(config: Pick<Config, "dashboardPathSecret">): string | undefined {
+  const path = dashboardPath(config);
+  return path ? `${path}/browser/ws` : undefined;
+}
+
+export function isDashboardPath(pathname: string, path: string): boolean {
+  return pathname === path || pathname.startsWith(`${path}/`);
 }
 
 export async function handleDashboard(
@@ -30,9 +47,21 @@ export async function handleDashboard(
   if (!path) return undefined;
 
   const url = new URL(request.url);
-  if (url.pathname !== path) return undefined;
+  if (!isDashboardPath(url.pathname, path)) return undefined;
+
+  const viewerPath = `${path}/browser`;
+  const wsPath = `${path}/browser/ws`;
+  if (url.pathname === wsPath) {
+    return { status: 426, body: "websocket required" };
+  }
+  if (url.pathname !== path && url.pathname !== viewerPath) {
+    return { status: 404, body: "not found" };
+  }
 
   if (request.method === "GET") {
+    if (url.pathname === viewerPath) {
+      return renderViewer(options, path, url.searchParams.get("notice"), url.searchParams.get("error"));
+    }
     return render(options, url.searchParams.get("notice"), url.searchParams.get("error"));
   }
   if (request.method !== "POST") {
@@ -46,8 +75,9 @@ export async function handleDashboard(
     return redirect(path, undefined, "Could not read the form.");
   }
 
+  const returnTo = String(form.get("next") ?? "") === "viewer" ? viewerPath : path;
   const action = parseAction(String(form.get("action") ?? ""));
-  if (!action) return redirect(path, undefined, "Unknown action.");
+  if (!action) return redirect(returnTo, undefined, "Unknown action.");
 
   switch (action) {
     case "add": {
@@ -81,17 +111,37 @@ export async function handleDashboard(
       }
       return redirect(path, `Removed ${name}.`);
     }
+    case "browser-start": {
+      if (!options.browser) return redirect(returnTo, undefined, "Browser session is not available.");
+      try {
+        await options.browser.start();
+      } catch (error) {
+        return redirect(returnTo, undefined, error instanceof Error ? error.message : String(error));
+      }
+      return redirect(returnTo, "Browser is running.");
+    }
+    case "browser-stop": {
+      if (!options.browser) return redirect(returnTo, undefined, "Browser session is not available.");
+      try {
+        await options.browser.stop();
+      } catch (error) {
+        return redirect(returnTo, undefined, error instanceof Error ? error.message : String(error));
+      }
+      return redirect(returnTo, "Browser stopped. Cookies stay on disk.");
+    }
     default: {
       const _exhaustive: never = action;
-      return redirect(path, undefined, `Unknown action: ${_exhaustive}`);
+      return redirect(returnTo, undefined, `Unknown action: ${_exhaustive}`);
     }
   }
 }
 
-type DashboardAction = "add" | "remove";
+type DashboardAction = "add" | "remove" | "browser-start" | "browser-stop";
 
 function parseAction(value: string): DashboardAction | undefined {
-  if (value === "add" || value === "remove") return value;
+  if (value === "add" || value === "remove" || value === "browser-start" || value === "browser-stop") {
+    return value;
+  }
   return undefined;
 }
 
@@ -120,14 +170,41 @@ async function render(
   }
 
   const mcpStatus = await probePiMcp(options.config);
+  const browser = browserStatus(options);
 
   return {
     status: 200,
-    body: page(options.config, servers, notice, loadError, mcpStatus),
+    body: page(options.config, servers, notice, loadError, mcpStatus, browser),
     headers: {
       "content-type": "text/html; charset=utf-8",
       "cache-control": "no-store",
     },
+  };
+}
+
+function renderViewer(
+  options: DashboardOptions,
+  path: string,
+  notice: string | null,
+  error: string | null,
+): GatewayResult {
+  return {
+    status: 200,
+    body: viewerPage(path, browserStatus(options), notice, error),
+    headers: {
+      "content-type": "text/html; charset=utf-8",
+      "cache-control": "no-store",
+    },
+  };
+}
+
+function browserStatus(options: DashboardOptions): BrowserStatus {
+  if (options.browser) return options.browser.status();
+  return {
+    running: false,
+    profileDir: browserProfileDir(options.config.agentCwd),
+    missing: [],
+    error: "Browser session is not wired in this process.",
   };
 }
 
@@ -137,6 +214,7 @@ function page(
   notice: string | null,
   error: string | null,
   mcpStatus: string | undefined,
+  browser: BrowserStatus,
 ): string {
   const model = config.piModel ?? "Pi default";
   const provider = config.piProvider ?? "Pi default";
@@ -189,6 +267,8 @@ function page(
     </table>
     <p class="hint">Model and phone come from <code>.env</code> on the Sprite. Change those there, then re-run <code>./scripts/provision.sh</code>. Pi always reads the user MCP file; the project file needs <code>--approve</code>.</p>
 
+    ${browserSection(config, browser)}
+
     <h2>MCP servers</h2>
     ${mcpStatus ? `<pre class="status">${escapeHtml(mcpStatus)}</pre>` : `<p class="hint">Could not run <code>pi mcp list</code> yet. After provision, this block shows whether Pi connected and which <code>mcp__*</code> tools it loaded.</p>`}
     <table>
@@ -212,6 +292,103 @@ function page(
       <button type="submit">Add server</button>
     </form>
   </main>
+</body>
+</html>`;
+}
+
+function browserSection(config: Config, browser: BrowserStatus): string {
+  const path = dashboardPath(config);
+  const viewer = browserViewerPath(config);
+  if (!path || !viewer) return "";
+  const state = browser.running ? "running" : "stopped";
+  const missing =
+    browser.missing.length > 0
+      ? `<p class="hint">Need ${browser.missing.map((name) => `<code>${escapeHtml(name)}</code>`).join(", ")} on the Sprite. Re-run <code>./scripts/provision.sh</code>.</p>`
+      : "";
+  return `
+    <h2>Browser</h2>
+    <p class="lede">One Chromium on this Sprite. Log in on the live view — never text passwords. Cookies stay in <code>browser-profile</code> across sleeps.</p>
+    <table>
+      <tr><th>Status</th><td>${escapeHtml(state)}</td></tr>
+      <tr><th>Profile</th><td><code>${escapeHtml(browser.profileDir)}</code></td></tr>
+      <tr><th>CDP</th><td><code>127.0.0.1:${BROWSER_CDP_PORT}</code> while running</td></tr>
+    </table>
+    ${missing}
+    <p>
+      <form class="row-form" method="post">
+        <input type="hidden" name="action" value="browser-start">
+        <button type="submit"${browser.missing.length && !browser.running ? " disabled" : ""}>Start browser</button>
+      </form>
+      <form class="row-form" method="post">
+        <input type="hidden" name="action" value="browser-stop">
+        <button type="submit">Stop</button>
+      </form>
+      <a href="${escapeHtml(viewer)}">Open live view</a>
+    </p>
+    <p class="hint">The live view streams this Chromium into this site. Keep that tab open while you type a login or MFA code so the Sprite stays awake.</p>`;
+}
+
+function viewerPage(
+  path: string,
+  browser: BrowserStatus,
+  notice: string | null,
+  error: string | null,
+): string {
+  const wsPath = `${path}/browser/ws`;
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sprite browser</title>
+  <style>
+    :root { color-scheme: dark; }
+    html, body { margin: 0; height: 100%; background: #111; color: #eee; font: 15px/1.4 system-ui, sans-serif; }
+    header { display: flex; gap: 0.75rem; align-items: center; padding: 0.5rem 0.8rem; border-bottom: 1px solid #333; }
+    header a, header button { color: inherit; font: inherit; }
+    #screen { height: calc(100% - 3rem); background: #000; }
+    .msg { padding: 1rem; }
+    .flash { padding: 0.5rem 0.8rem; border: 1px solid #555; }
+    .bad { border-color: #a11; }
+    .ok { border-color: #1f7a3a; }
+    form { display: inline; }
+  </style>
+</head>
+<body>
+  <header>
+    <a href="${escapeHtml(path)}">Settings</a>
+    <form method="post" action="${escapeHtml(path)}">
+      <input type="hidden" name="action" value="browser-start">
+      <input type="hidden" name="next" value="viewer">
+      <button type="submit">Start</button>
+    </form>
+    <form method="post" action="${escapeHtml(path)}">
+      <input type="hidden" name="action" value="browser-stop">
+      <input type="hidden" name="next" value="viewer">
+      <button type="submit">Stop</button>
+    </form>
+    <span>${browser.running ? "streaming" : "stopped"}</span>
+  </header>
+  ${notice ? `<p class="flash ok">${escapeHtml(notice)}</p>` : ""}
+  ${error ? `<p class="flash bad">${escapeHtml(error)}</p>` : ""}
+  ${
+    browser.running
+      ? `<div id="screen"></div>
+  <script type="module">
+    import RFB from "https://cdn.jsdelivr.net/npm/@novnc/novnc@1.5.0/lib/rfb.js";
+    const proto = location.protocol === "https:" ? "wss:" : "ws:";
+    const rfb = new RFB(document.getElementById("screen"), proto + "//" + location.host + ${JSON.stringify(wsPath)});
+    rfb.scaleViewport = true;
+    rfb.clipViewport = true;
+    rfb.addEventListener("disconnect", () => {
+      const msg = document.createElement("p");
+      msg.className = "msg";
+      msg.textContent = "Disconnected. Start the browser again if the Sprite slept.";
+      document.body.appendChild(msg);
+    });
+  </script>`
+      : `<p class="msg">Browser is stopped. Start it, then this page will stream the Sprite Chromium so you can log in.</p>`
+  }
 </body>
 </html>`;
 }

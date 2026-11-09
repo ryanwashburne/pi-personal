@@ -2,8 +2,9 @@ import { expect, test } from "bun:test";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { BrowserSession } from "./browser-session";
 import type { Config } from "./config";
-import { dashboardPath } from "./dashboard";
+import { browserViewerPath, dashboardPath } from "./dashboard";
 import { createDedupe } from "./dedupe";
 import { listMcpServers } from "./mcp-config";
 import { createGateway } from "./webhook";
@@ -27,9 +28,37 @@ const config: Config = {
   piModel: "anthropic/claude-haiku-5.5",
 };
 
+function mockBrowser(dir: string): BrowserSession & { running: boolean; starts: number; stops: number } {
+  const session = {
+    running: false,
+    starts: 0,
+    stops: 0,
+    status() {
+      return {
+        running: session.running,
+        profileDir: join(dir, "browser-profile"),
+        missing: [] as string[],
+      };
+    },
+    async start() {
+      session.starts += 1;
+      session.running = true;
+    },
+    async stop() {
+      session.stops += 1;
+      session.running = false;
+    },
+    vncPort() {
+      return 5900;
+    },
+  };
+  return session;
+}
+
 async function setup() {
   const dir = await mkdtemp(join(tmpdir(), "pi-dashboard-"));
   const restarts: number[] = [];
+  const browser = mockBrowser(dir);
   const gateway = await createGateway({
     config: { ...config, agentCwd: dir, mcpConfigPath: join(dir, "mcp.json"), userMcpPath: join(dir, "user-mcp.json") },
     userMcpPath: join(dir, "missing-user-mcp.json"),
@@ -46,12 +75,13 @@ async function setup() {
       },
       async stop() {},
     },
+    browser,
     dedupe: await createDedupe(join(dir, "processed.json")),
     async hold() {
       return { async heartbeat() {}, async release() {} };
     },
   });
-  return { gateway, restarts, mcpPath: join(dir, "mcp.json"), userPath: join(dir, "user-mcp.json") };
+  return { gateway, restarts, browser, mcpPath: join(dir, "mcp.json"), userPath: join(dir, "user-mcp.json") };
 }
 
 function dash(path: string, init?: RequestInit) {
@@ -67,6 +97,8 @@ test("serves HTML at the unguessable settings path", async () => {
   expect(result.headers?.["content-type"]).toContain("text/html");
   expect(result.body).toContain("Add HTTP MCP");
   expect(result.body).toContain("None configured");
+  expect(result.body).toContain("Open live view");
+  expect(result.body).toContain("stopped");
 });
 
 test("does not serve a dashboard when DASHBOARD_SECRET is unset", async () => {
@@ -163,6 +195,37 @@ test("removes an MCP server from the form", async () => {
   expect(removed.status).toBe(303);
   expect(restarts).toHaveLength(2);
   expect(await listMcpServers(mcpPath)).toEqual([]);
+});
+
+test("starts the Sprite browser from the settings form", async () => {
+  const { gateway, browser } = await setup();
+  const path = dashboardPath(config);
+  if (!path) throw new Error("dashboard path missing");
+  const posted = await gateway.handle(
+    dash(path, {
+      method: "POST",
+      body: new URLSearchParams({ action: "browser-start" }),
+    }),
+  );
+  expect(posted.status).toBe(303);
+  expect(browser.starts).toBe(1);
+  expect(browser.running).toBe(true);
+
+  const page = await gateway.handle(dash(path));
+  expect(page.body).toContain("running");
+
+  const viewerPath = browserViewerPath(config);
+  if (!viewerPath) throw new Error("viewer path missing");
+  const viewer = await gateway.handle(dash(viewerPath));
+  expect(viewer.status).toBe(200);
+  expect(viewer.body).toContain("streaming");
+  expect(viewer.body).toContain(`${viewerPath}/ws`);
+});
+
+test("404s a guessed browser viewer path", async () => {
+  const { gateway } = await setup();
+  const result = await gateway.handle(dash("/settings/nope/browser"));
+  expect(result.status).toBe(404);
 });
 
 test("rejects a non-http MCP URL", async () => {
