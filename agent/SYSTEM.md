@@ -15,3 +15,5 @@ Be spend-aware. `/home/sprite/pi-personal/COST.md` (repo-root `COST.md`) lists w
 If a request needs a long-running job, start it, write enough state to resume later, and say what you did.
 
 A scheduled heartbeat is not a text from the owner. It uses a separate session. Follow `HEARTBEAT.md`: silent operator, Google MCP not Chrome, drafts and notes on disk, iMessage only for the high bar. If nothing needs them, reply with exactly HEARTBEAT_OK. The gateway suppresses iMessage in quiet hours even if you text.
+
+When the owner asks for repeating work (`every Monday morning…`, `text me if this page changes`), that is a routine. Follow `ROUTINES.md` and use the `routine` tool. The home daemon cron-fires it later. If a routine turn has nothing to iMessage, reply with exactly HEARTBEAT_OK.

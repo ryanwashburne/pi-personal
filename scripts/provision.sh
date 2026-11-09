@@ -54,6 +54,8 @@ sprite exec -- bash -lc "if [ -d $REMOTE_AGENT/browser-profile ]; then rm -rf /t
 sprite exec -- bash -lc "if [ -f $REMOTE_AGENT/logins.md ]; then cp -a $REMOTE_AGENT/logins.md /tmp/pi-personal-logins.md; fi"
 sprite exec -- bash -lc "if [ -f $REMOTE_AGENT/memory/NOTES.md ]; then cp -a $REMOTE_AGENT/memory/NOTES.md /tmp/pi-personal-notes.md; fi"
 sprite exec -- bash -lc "if [ -f $REMOTE_AGENT/memory/HEARTBEAT-STATE.md ]; then cp -a $REMOTE_AGENT/memory/HEARTBEAT-STATE.md /tmp/pi-personal-heartbeat-state.md; fi"
+sprite exec -- bash -lc "if [ -f $REMOTE_AGENT/memory/routines.json ]; then cp -a $REMOTE_AGENT/memory/routines.json /tmp/pi-personal-routines.json; fi"
+sprite exec -- bash -lc "if [ -d $REMOTE_AGENT/memory/routines ]; then rm -rf /tmp/pi-personal-routines; cp -a $REMOTE_AGENT/memory/routines /tmp/pi-personal-routines; fi"
 tar -czf - \
   --exclude .git \
   --exclude node_modules \
@@ -65,6 +67,8 @@ tar -czf - \
   --exclude agent/.pi/mcp.json \
   --exclude agent/memory/NOTES.md \
   --exclude agent/memory/HEARTBEAT-STATE.md \
+  --exclude agent/memory/routines.json \
+  --exclude agent/memory/routines \
   src package.json bun.lock tsconfig.json agent scripts README.md |
   sprite exec -- tar -xzf - -C "$REMOTE_APP"
 
@@ -80,7 +84,10 @@ if [ ! -f $REMOTE_AGENT/logins.md ] && [ -f /tmp/pi-personal-logins.md ]; then m
 if [ -f /tmp/pi-personal-notes.md ]; then mv /tmp/pi-personal-notes.md $REMOTE_AGENT/memory/NOTES.md
 elif [ ! -f $REMOTE_AGENT/memory/NOTES.md ] && [ -f $REMOTE_AGENT/memory/NOTES.md.example ]; then cp $REMOTE_AGENT/memory/NOTES.md.example $REMOTE_AGENT/memory/NOTES.md; fi
 if [ -f /tmp/pi-personal-heartbeat-state.md ]; then mv /tmp/pi-personal-heartbeat-state.md $REMOTE_AGENT/memory/HEARTBEAT-STATE.md
-elif [ ! -f $REMOTE_AGENT/memory/HEARTBEAT-STATE.md ] && [ -f $REMOTE_AGENT/memory/HEARTBEAT-STATE.md.example ]; then cp $REMOTE_AGENT/memory/HEARTBEAT-STATE.md.example $REMOTE_AGENT/memory/HEARTBEAT-STATE.md; fi"
+elif [ ! -f $REMOTE_AGENT/memory/HEARTBEAT-STATE.md ] && [ -f $REMOTE_AGENT/memory/HEARTBEAT-STATE.md.example ]; then cp $REMOTE_AGENT/memory/HEARTBEAT-STATE.md.example $REMOTE_AGENT/memory/HEARTBEAT-STATE.md; fi
+if [ -f /tmp/pi-personal-routines.json ]; then mv /tmp/pi-personal-routines.json $REMOTE_AGENT/memory/routines.json
+elif [ ! -f $REMOTE_AGENT/memory/routines.json ] && [ -f $REMOTE_AGENT/memory/routines.json.example ]; then cp $REMOTE_AGENT/memory/routines.json.example $REMOTE_AGENT/memory/routines.json; fi
+if [ -d /tmp/pi-personal-routines ]; then rm -rf $REMOTE_AGENT/memory/routines; mv /tmp/pi-personal-routines $REMOTE_AGENT/memory/routines; fi"
 sprite exec -- bash -lc "cat > $REMOTE_APP/.env" < .env
 sprite exec -- bash -lc "grep -q AGENT_CWD= $REMOTE_APP/.env || echo AGENT_CWD=$REMOTE_AGENT >> $REMOTE_APP/.env"
 
@@ -152,6 +159,8 @@ fi
 if [[ -n "${HEARTBEAT_SECRET:-}" ]]; then
   echo "Home heartbeat (Mac or Raspberry Pi: ./scripts/install-home.sh):"
   echo "  ${ORIGIN}/heartbeat/${HEARTBEAT_SECRET}"
+  echo "Routines fire at:"
+  echo "  ${ORIGIN}/routine/${HEARTBEAT_SECRET}"
 else
   echo "Home heartbeat: off (set HEARTBEAT_SECRET in .env to enable)"
 fi

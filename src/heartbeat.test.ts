@@ -270,9 +270,13 @@ test("provision.sh preserves gitignored notes and heartbeat state", async () => 
   const script = await Bun.file(path).text();
   expect(script).toContain("memory/NOTES.md");
   expect(script).toContain("memory/HEARTBEAT-STATE.md");
+  expect(script).toContain("memory/routines.json");
   expect(script).toContain("--exclude agent/memory/NOTES.md");
   expect(script).toContain("--exclude agent/memory/HEARTBEAT-STATE.md");
+  expect(script).toContain("--exclude agent/memory/routines.json");
   const ignore = await Bun.file(join(import.meta.dir, "../.gitignore")).text();
   expect(ignore).toContain("agent/memory/NOTES.md");
   expect(ignore).toContain("agent/memory/HEARTBEAT-STATE.md");
+  expect(ignore).toContain("agent/memory/routines.json");
+  expect(ignore).toContain("agent/memory/routines/");
 });

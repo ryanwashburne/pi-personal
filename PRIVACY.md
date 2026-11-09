@@ -27,7 +27,7 @@ Sources: [Is my data used for model training?](https://privacy.claude.com/en/art
 
 ```
 Owner iPhone → Apple iMessage → Sendblue Mac + API → Fly Sprite gateway → Pi (local tools) → OpenRouter → upstream model
-Home daemon (Mac/rpi) → HTTPS /heartbeat → Fly Sprite gateway ↗
+Home daemon (Mac/rpi) → HTTPS /heartbeat or POST /routine → Fly Sprite gateway ↗
                                                                                  ↘ Sprite Chromium → Tailscale exit node → websites
 ```
 
@@ -40,7 +40,7 @@ The reply walks the message path back. Browser traffic is a side path. Sprite di
 | iMessage body | Sendblue inbound webhook (`content`) | The user prompt for Pi | Yes — Sendblue, Fly logs (first 80 chars), Pi session, LLM |
 | Phone numbers | Webhook `from_number`; `ALLOWED_PHONE`; Sendblue from-number | Allowlist; typing indicator; reply routing; settings page display | Yes — Sendblue, settings HTML, gateway logs |
 | Attachments | Sendblue `media_url` (CDN link; gateway does not download) | Appended to the prompt as a URL. Pi may fetch it. | URL always to the LLM. Bytes only if Pi fetches them. |
-| Conversation history | Pi JSONL under `agent/sessions/` (`imessage` for texts; `heartbeat` for the home-daemon loop) | Every later turn’s context in that session | Yes — full history to the LLM each turn; disk replica on Tigris |
+| Conversation history | Pi JSONL under `agent/sessions/` (`imessage` for texts; `heartbeat` for the stay-ahead loop; `routines` for cron jobs) | Every later turn’s context in that session | Yes — full history to the LLM each turn; disk replica on Tigris |
 | System + skill files | `SYSTEM.md`, `imessage.md`, `chrome.md`, `live-view.md`, `memory/NOTES.md`, `PRIVACY.md`, `COST.md` | Standing instructions and durable memory | Yes — included in model context when Pi loads them |
 | Site logins | gitignored `logins.md` (url / username / password / notes) | Pi fills Sprite Chrome via Playwright. Must not be texted. | To the LLM if Pi reads the file or passes values as tool args |
 | Browser cookies / logged-in sites | `agent/browser-profile/` Chromium profile | Stay signed in across Sprite sleeps | Page snapshots and fetched content go to the LLM. Cookies stay on disk unless a site or Chrome syncs them. |
@@ -48,6 +48,7 @@ The reply walks the message path back. Browser traffic is a side path. Sprite di
 | Shell / files on the Sprite | Pi tools: `read`, `bash`, `edit`, `write`, `grep`, `find`, `ls`, `codemode`, MCP | Do the task | Tool outputs in the session and in the next LLM call |
 | Extra MCP servers | HTTP servers added on the settings page (optional bearer token) | Whatever that server exposes | Tool results → LLM. Token stored on Sprite only. The MCP host sees the calls. |
 | Heartbeat mail / calendar scan | Google MCP on the scheduled home-daemon ping | Stay-ahead drafts and rare iMessage alerts | Yes — subjects/events to the LLM in the `heartbeat` session. Gmail drafts stay in Gmail. |
+| Routines | Owner iMessage → `routine` tool → home-daemon cron → POST `/routine/$HEARTBEAT_SECRET` | Repeating prompts (summaries, watches) | Yes — the routine prompt and tool results go to the LLM in the `routines` session. The cron and prompt also live in `~/.pi-personal-home/routines.json` on the home box. |
 | Home IP / browsing destinations | Tailscale exit node (Mac or Raspberry Pi) for Chrome only | Make Sprite Chrome look like house internet | Websites see the home IP. Tailscale does not read payload. Sendblue stays on Fly. |
 
 ## Who processes it
@@ -82,6 +83,7 @@ Disk survives sleep; processes do not. These paths are gitignored.
 | `agent/state/processed.json` | Sendblue `message_handle` ids (no bodies) | Low |
 | `~/.pi/agent/auth.json`, `~/.pi/agent/mcp.json`, and `agent/.pi/mcp.json` | Provider credentials; MCP URLs, host-specific Playwright paths, and bearer tokens | Model-account and MCP-server access |
 | `agent/memory/NOTES.md` | Durable notes Pi is told to keep | Whatever was written there |
+| `agent/memory/routines.json` | Scheduled prompts and cron | The owner’s repeating jobs |
 | Fly `gateway.log` | First 80 chars of each inbound text, phone, handles | Message snippets + identity |
 
 ## Controls already in the repo

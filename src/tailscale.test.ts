@@ -114,6 +114,7 @@ test("start launches userspace tailscaled and up with the exit node", async () =
   });
   await session.start();
   expect(session.status().running).toBe(true);
+  expect(session.status().exitNodeIp).toBe("100.64.1.1");
   expect(session.status().socksUrl).toBe("socks5://127.0.0.1:1055");
   expect(launched[0].cmd).toBe("/usr/sbin/tailscaled");
   expect(launched[0].args).toContain("--tun=userspace-networking");

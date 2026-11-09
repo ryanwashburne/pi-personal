@@ -34,6 +34,11 @@ test("loadConfig reads an optional heartbeat secret", () => {
   expect(config.heartbeatPathSecret).toBe("beat-secret");
 });
 
+test("loadConfig defaults the home daemon port", () => {
+  expect(loadConfig(base).homeDaemonPort).toBe(8787);
+  expect(loadConfig({ ...base, HOME_DAEMON_PORT: "9001" }).homeDaemonPort).toBe(9001);
+});
+
 test("loadConfig reads an optional Sprite URL", () => {
   const config = loadConfig({ ...base, SPRITE_URL: "https://abc.sprites.app/" });
   expect(config.spriteUrl).toBe("https://abc.sprites.app");

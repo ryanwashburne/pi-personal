@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Home box helper for pi-personal: Tailscale exit node + Sprite heartbeat ping.
+# Home box helper for pi-personal: Tailscale exit node, Sprite heartbeat ping,
+# and cron routines that wake the Sprite with a prompt.
 # Run on a Mac or a Raspberry Pi. The iMessage agent stays on the Fly Sprite.
 #
 #   ./scripts/install-home.sh            # install or update
@@ -32,6 +33,7 @@ HOME_DIR="$(home_dir)"
 STATE_DIR="${PI_PERSONAL_HOME_DIR:-$HOME_DIR/.pi-personal-home}"
 ENV_FILE="$STATE_DIR/env"
 INSTALLED_SCRIPT="$STATE_DIR/install-home.sh"
+INSTALLED_DAEMON="$STATE_DIR/home-daemon.py"
 PLIST="$HOME_DIR/Library/LaunchAgents/com.pi-personal.home.plist"
 LINUX_UNIT="/etc/systemd/system/pi-personal-home.service"
 LINUX_ENV="/etc/pi-personal-home.env"
@@ -160,6 +162,7 @@ write_env() {
   local sprite="${SPRITE_URL:-}"
   local secret="${HEARTBEAT_SECRET:-}"
   local interval="${HEARTBEAT_INTERVAL_SECONDS:-$INTERVAL_DEFAULT}"
+  local port="${HOME_DAEMON_PORT:-8787}"
   sprite="${sprite%/}"
   mkdir -p "$STATE_DIR"
   umask 077
@@ -167,6 +170,7 @@ write_env() {
 SPRITE_URL=$sprite
 HEARTBEAT_SECRET=$secret
 HEARTBEAT_INTERVAL_SECONDS=$interval
+HOME_DAEMON_PORT=$port
 EOF
   if [[ "$OS" == Linux && "$(id -u)" -eq 0 ]]; then
     cp "$ENV_FILE" "$LINUX_ENV"
@@ -178,6 +182,17 @@ install_script_copy() {
   mkdir -p "$STATE_DIR"
   cp "$SCRIPT_SOURCE" "$INSTALLED_SCRIPT"
   chmod 755 "$INSTALLED_SCRIPT"
+  local daemon_src
+  daemon_src="$(dirname "$SCRIPT_SOURCE")/home-daemon.py"
+  if [[ -f "$daemon_src" ]]; then
+    cp "$daemon_src" "$INSTALLED_DAEMON"
+    chmod 755 "$INSTALLED_DAEMON"
+  elif [[ -n "${ROOT:-}" && -f "$ROOT/scripts/home-daemon.py" ]]; then
+    cp "$ROOT/scripts/home-daemon.py" "$INSTALLED_DAEMON"
+    chmod 755 "$INSTALLED_DAEMON"
+  else
+    fail "home-daemon.py is missing next to install-home.sh."
+  fi
 }
 
 install_launchd() {
@@ -218,7 +233,7 @@ install_systemd() {
   [[ "$(id -u)" -eq 0 ]] || fail "On Linux, re-run with sudo so the service survives reboot without a login."
   cat > "$LINUX_UNIT" <<EOF
 [Unit]
-Description=pi-personal home (Tailscale exit node + Sprite heartbeat)
+Description=pi-personal home (Tailscale exit node + Sprite heartbeat + routines)
 After=network-online.target tailscaled.service
 Wants=network-online.target
 
@@ -255,41 +270,22 @@ uninstall() {
   log "Stopped the home daemon. Tailscale itself is still installed."
 }
 
-ping_heartbeat() {
-  local sprite="${SPRITE_URL:-}"
-  local secret="${HEARTBEAT_SECRET:-}"
-  sprite="${sprite%/}"
-  if [[ -z "$sprite" || -z "$secret" ]]; then
-    log "heartbeat skipped (set SPRITE_URL and HEARTBEAT_SECRET, then re-run install)"
-    return 0
-  fi
-  local code
-  code="$(curl -sS -o /tmp/pi-personal-heartbeat-body -w "%{http_code}" --max-time 600 "$sprite/heartbeat/$secret" || true)"
-  case "$code" in
-    200) log "heartbeat $(tr -d '\n' </tmp/pi-personal-heartbeat-body 2>/dev/null || echo ok)" ;;
-    "") log "heartbeat failed (curl error)" ;;
-    *) log "heartbeat HTTP $code" ;;
-  esac
-}
-
 run_daemon() {
   find_and_load_env || true
-  local interval="${HEARTBEAT_INTERVAL_SECONDS:-$INTERVAL_DEFAULT}"
-  [[ "$interval" =~ ^[0-9]+$ ]] || interval="$INTERVAL_DEFAULT"
-  while true; do
-    if tailscale_bin >/dev/null 2>&1; then
-      ts set --advertise-exit-node >/dev/null 2>&1 || log "tailscale advertise failed"
-    else
-      log "tailscale missing"
-    fi
-    ping_heartbeat
-    sleep "$interval"
-  done
+  command -v python3 >/dev/null 2>&1 || fail "python3 is required for the home daemon scheduler."
+  local daemon_py="$INSTALLED_DAEMON"
+  if [[ ! -f "$daemon_py" ]]; then
+    daemon_py="$(dirname "$SCRIPT_SOURCE")/home-daemon.py"
+  fi
+  [[ -f "$daemon_py" ]] || fail "home-daemon.py is missing."
+  export PI_PERSONAL_HOME_DIR="$STATE_DIR"
+  exec python3 "$daemon_py" daemon
 }
 
 install() {
   find_and_load_env || true
   ensure_python
+  command -v python3 >/dev/null 2>&1 || fail "python3 is required for the home daemon scheduler."
   ensure_tailscale_installed
   enable_linux_forwarding
   advertise_exit_node
@@ -306,7 +302,7 @@ install() {
   local name
   name="$(print_exit_node_name)"
   log
-  log "Home daemon is running (exit node + heartbeat ping)."
+  log "Home daemon is running (exit node + heartbeat ping + routines)."
   log "Re-run this script to update it."
   if [[ -n "$name" ]]; then
     log
@@ -321,12 +317,12 @@ install() {
   if [[ -z "${SPRITE_URL:-}" || -z "${HEARTBEAT_SECRET:-}" ]]; then
     log "  3. Set SPRITE_URL and HEARTBEAT_SECRET (provision.sh prints the heartbeat URL) and re-run this script"
   else
-    log "  Heartbeat ping is on. Leave this machine powered on home internet."
+    log "  Heartbeat ping and routines are on. Leave this machine powered on home internet."
   fi
   if [[ "$OS" == Darwin ]]; then
     log
     log "To move this to a Raspberry Pi:"
-    log "  scp $ENV_FILE $INSTALLED_SCRIPT USER@raspberrypi.local:"
+    log "  scp $ENV_FILE $INSTALLED_SCRIPT $INSTALLED_DAEMON USER@raspberrypi.local:"
     log "  ssh USER@raspberrypi.local"
     log "  sudo bash install-home.sh"
   fi

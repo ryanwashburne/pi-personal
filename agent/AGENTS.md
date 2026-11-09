@@ -4,15 +4,19 @@ This directory is Pi's working tree on the Sprite. Repo-root `AGENTS.md` is for 
 
 - `imessage.md` — what Messages actually renders in a reply bubble
 - `HEARTBEAT.md` — stay-ahead loop: high notify bar, drafts/notes, HEARTBEAT_OK if quiet
+- `ROUTINES.md` — owner-defined cron prompts on the home daemon (`routine` tool)
 - `chrome.md` — shared Sprite Chromium and when to hand it to the owner
 - `live-view.md` — public live-view URL (gitignored; written by the gateway)
 - `.pi/mcp.json` — Playwright and extra MCP servers (gitignored; written by the gateway; do not commit)
 - `memory/NOTES.md` — durable notes across sleeps (gitignored; seeded from `NOTES.md.example`)
 - `memory/HEARTBEAT-STATE.md` — ids the heartbeat already considered (gitignored)
+- `memory/routines.json` — scheduled routines (gitignored; the home daemon is the clock)
+- `memory/routines/` — per-routine scratch (gitignored)
 - `logins.md` — site usernames/passwords (gitignored; do not commit)
 - `.cc-safety-net/policy.json` — extra secret deny paths for CC Safety Net (Pi on the Sprite). Do not deny `logins.md` or `live-view.md`; Pi must read those. Google OAuth tokens live in `~/.pi/agent/google-oauth.json` and are denied.
 - `.pi/extensions/fetch/` — keyless `fetch` tool for public http(s) URLs
 - `.pi/extensions/spend/` — live `spend` tool (session tokens, Sendblue, OpenRouter)
+- `.pi/extensions/routine/` — create/list/remove home-daemon cron routines
 - `sessions/` — Pi session files (do not edit by hand)
 - `state/` — webhook dedupe; owned by the gateway
 - `browser-profile/` — Chromium profile for the settings-page live view (cookies, logins)

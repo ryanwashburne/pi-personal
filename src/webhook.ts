@@ -6,6 +6,7 @@ import { createDedupe, type Dedupe } from "./dedupe";
 import { webhookPath, webhookSecretOk } from "./early-typing";
 import { syncGoogleWorkspaceMcp } from "./google-mcp";
 import { handleHeartbeat } from "./heartbeat";
+import { handleRoutineCatalog, handleRoutineFire } from "./routines";
 import { promptFromInbound, parseInbound } from "./inbound";
 import { promptWithLiveView, syncLiveViewFile } from "./live-view";
 import {
@@ -38,6 +39,7 @@ type GatewayOptions = {
   sendblue: SendblueClient;
   pi: PiAgent;
   heartbeatPi?: PiAgent;
+  routinesPi?: PiAgent;
   now?: () => Date;
   browser?: BrowserSession;
   tailscale?: TailscaleService;
@@ -101,6 +103,19 @@ export async function createGateway(options: GatewayOptions): Promise<Gateway> {
         now: options.now,
       });
       if (heartbeat) return heartbeat;
+      const routine = await handleRoutineFire(request, {
+        config: options.config,
+        pi: options.routinesPi ?? options.pi,
+        sendblue: options.sendblue,
+        hold,
+        isBusy: () => piBusy,
+        setBusy: (busy) => {
+          piBusy = busy;
+        },
+      });
+      if (routine) return routine;
+      const catalog = await handleRoutineCatalog(request, { config: options.config });
+      if (catalog) return catalog;
       if (request.method !== "POST" || url.pathname !== webhookPath(options.config)) {
         return { status: 404, body: "not found" };
       }
