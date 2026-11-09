@@ -58,6 +58,8 @@ export function createBrowserSession(options: BrowserSessionOptions): BrowserSes
   let running = false;
   let stopping = false;
   let error: string | undefined;
+  let died: string | undefined;
+  const logs: string[] = [];
   const children: ChildProcess[] = [];
   let hold: Hold | undefined;
   let heartbeat: ReturnType<typeof setInterval> | undefined;
@@ -89,27 +91,38 @@ export function createBrowserSession(options: BrowserSessionOptions): BrowserSes
 
     mkdirSync(profileDir, { recursive: true });
     error = undefined;
-    const logs: string[] = [];
+    died = undefined;
+    logs.length = 0;
+
+    const throwIfDied = () => {
+      if (died) throw new Error(died);
+    };
 
     try {
-      children.push(
-        watchExit(
-          track(
-            spawnChild("Xvfb", [BROWSER_DISPLAY, "-screen", "0", `${BROWSER_WIDTH}x${BROWSER_HEIGHT}x24`, "-nolisten", "tcp"], {
-              stdio: ["ignore", "pipe", "pipe"],
-            }),
-            logs,
-          ),
-          "Xvfb",
-        ),
-      );
-      await delay(options.readyDelayMs ?? 250);
+      const xvfb = which("Xvfb");
+      const vnc = which("x11vnc");
+      if (!xvfb || !vnc) throw new Error("Xvfb or x11vnc disappeared after the dependency check.");
 
       children.push(
         watchExit(
           track(
             spawnChild(
-              "x11vnc",
+              xvfb,
+              [BROWSER_DISPLAY, "-ac", "-screen", "0", `${BROWSER_WIDTH}x${BROWSER_HEIGHT}x24`, "-nolisten", "tcp"],
+              { stdio: ["ignore", "pipe", "pipe"] },
+            ),
+            logs,
+          ),
+          "Xvfb",
+        ),
+      );
+      await delay(options.readyDelayMs ?? 400);
+
+      children.push(
+        watchExit(
+          track(
+            spawnChild(
+              vnc,
               [
                 "-display",
                 BROWSER_DISPLAY,
@@ -122,7 +135,7 @@ export function createBrowserSession(options: BrowserSessionOptions): BrowserSes
                 "-repeat",
                 "-noxdamage",
               ],
-              { stdio: ["ignore", "pipe", "pipe"] },
+              { stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, DISPLAY: BROWSER_DISPLAY } },
             ),
             logs,
           ),
@@ -130,9 +143,13 @@ export function createBrowserSession(options: BrowserSessionOptions): BrowserSes
         ),
       );
       await waitForPort(BROWSER_VNC_PORT, 8_000);
+      throwIfDied();
 
       const chrome = chromePath(which);
       if (!chrome) throw new Error("chromium disappeared after the dependency check.");
+      if (chrome.includes("/snap/")) {
+        throw new Error("Snap Chromium cannot run under Xvfb. Install the apt package: sudo apt-get install -y chromium");
+      }
       children.push(
         watchExit(
           track(
@@ -141,9 +158,12 @@ export function createBrowserSession(options: BrowserSessionOptions): BrowserSes
               [
                 `--user-data-dir=${profileDir}`,
                 `--window-size=${BROWSER_WIDTH},${BROWSER_HEIGHT}`,
+                `--window-position=0,0`,
                 `--remote-debugging-port=${BROWSER_CDP_PORT}`,
                 "--remote-debugging-address=127.0.0.1",
+                "--ozone-platform=x11",
                 "--no-sandbox",
+                "--disable-setuid-sandbox",
                 "--test-type",
                 "--disable-dev-shm-usage",
                 "--disable-gpu",
@@ -155,7 +175,11 @@ export function createBrowserSession(options: BrowserSessionOptions): BrowserSes
               ],
               {
                 stdio: ["ignore", "pipe", "pipe"],
-                env: { ...process.env, DISPLAY: BROWSER_DISPLAY },
+                env: {
+                  ...process.env,
+                  DISPLAY: BROWSER_DISPLAY,
+                  DBUS_SESSION_BUS_ADDRESS: "unix:path=/dev/null",
+                },
               },
             ),
             logs,
@@ -163,6 +187,8 @@ export function createBrowserSession(options: BrowserSessionOptions): BrowserSes
           "chromium",
         ),
       );
+      await waitForPort(BROWSER_CDP_PORT, 15_000);
+      throwIfDied();
 
       running = true;
       hold = await holdFn().catch((caught) => {
@@ -175,7 +201,7 @@ export function createBrowserSession(options: BrowserSessionOptions): BrowserSes
       heartbeat.unref();
     } catch (caught) {
       error = caught instanceof Error ? caught.message : String(caught);
-      if (logs.length > 0) error = `${error}\n${logs.join("").slice(-1500)}`;
+      if (logs.length > 0) error = `${error}\n${logs.join("").slice(-2000)}`;
       await stopChildren(children);
       children.length = 0;
       running = false;
@@ -201,8 +227,14 @@ export function createBrowserSession(options: BrowserSessionOptions): BrowserSes
 
   function watchExit(child: ChildProcess, label: string): ChildProcess {
     child.on("exit", (code) => {
-      if (!running || stopping) return;
-      error = `${label} exited (code=${code})`;
+      const message = `${label} exited (code=${code})`;
+      const detail = logs.length > 0 ? `${message}\n${logs.join("").slice(-2000)}` : message;
+      if (stopping) return;
+      error = detail;
+      if (!running) {
+        died = detail;
+        return;
+      }
       void stop();
     });
     return child;
