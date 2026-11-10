@@ -4,7 +4,7 @@ Personal iMessage agent on a Fly Sprite. You text a Sendblue number; the Sprite 
 
 This git repo is public. Secrets stay in gitignored files on the Mac and on the Sprite.
 
-`agent/AGENTS.md` is Pi’s workspace map (nested files win for that tree). This file is for coding agents working on the repo.
+`agent/AGENTS.md` is Pi’s workspace map (nested files win for that tree). This file is for coding agents working on `apps/sprite`; the monorepo map is the root `AGENTS.md`. Paths below are relative to `apps/sprite`.
 
 `PRIVACY.md` is the data-flow map: what Pi sees on the owner’s behalf, which vendors process it, and that Anthropic does not train on commercial API traffic by default. Read it before changing webhooks, sessions, browser, MCP, or logging.
 

@@ -6,6 +6,8 @@ This is a personal assistant, not a coding harness. Pi runs **inside** the Sprit
 
 This repo is meant to be public. Keep secrets in `.env` on your machine and on the Sprite — never in git.
 
+This is the `apps/sprite` package of the pi-personal monorepo. Every path and command below is relative to `apps/sprite`, so `cd apps/sprite` first. `.env` lives at `apps/sprite/.env`.
+
 ## Flow
 
 1. You iMessage the Sendblue number from your allowlisted phone.
