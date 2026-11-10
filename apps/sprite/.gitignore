@@ -1,0 +1,37 @@
+# secrets and local runtime
+.env
+.env.*
+!.env.example
+auth.json
+credentials.json
+**/.sendblue/
+
+# Fly Sprites CLI local selection (org + sprite names)
+.sprite
+.sprites/
+
+# Pi / gateway state on disk
+agent/sessions/
+agent/state/
+agent/browser-profile/
+agent/logins.md
+agent/live-view.md
+agent/.pi/mcp.json
+agent/memory/NOTES.md
+agent/memory/HEARTBEAT-STATE.md
+agent/memory/routines.json
+agent/memory/routines/
+agent/memory/home.json
+browser-bin/
+tailscale-state/
+/.pi/
+
+# deps and junk
+node_modules/
+__pycache__/
+*.pyc
+.DS_Store
+._*
+*.log
+*.pem
+*.key

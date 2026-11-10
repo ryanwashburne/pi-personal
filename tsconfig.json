@@ -1,12 +1,3 @@
 {
-  "compilerOptions": {
-    "target": "ES2023",
-    "module": "ESNext",
-    "moduleResolution": "bundler",
-    "strict": true,
-    "noEmit": true,
-    "types": ["bun-types"],
-    "skipLibCheck": true
-  },
-  "include": ["src/**/*.ts"]
+  "extends": "@pi-personal/config/tsconfig.base.json"
 }
