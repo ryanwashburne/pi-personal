@@ -1,0 +1,60 @@
+{
+  "name": "pi-personal",
+  "private": true,
+  "workspaces": {
+    "packages": [
+      "apps/*",
+      "packages/*"
+    ],
+    "catalog": {
+      "zod": "^4.5.4",
+      "typescript": "^6.0.3",
+      "@types/node": "^26.4.1",
+      "varlock": "1.23.0",
+      "next-themes": "^0.4.6",
+      "sonner": "^2.0.8",
+      "tailwindcss": "^4.3.3",
+      "convex": "^1.48.0",
+      "better-auth": "1.6.17",
+      "@convex-dev/better-auth": "^0.12.5"
+    }
+  },
+  "type": "module",
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build --filter='!desktop' && turbo run build -F desktop",
+    "check-types": "turbo run check-types",
+    "dev:web": "turbo run dev -F web --",
+    "dev:desktop": "turbo run dev:hmr -F desktop --",
+    "build:desktop": "turbo run build:stable -F desktop --",
+    "build:desktop:canary": "turbo run build:canary -F desktop --",
+    "dev:server": "turbo run dev -F @pi-personal/backend --",
+    "dev:setup": "turbo run dev:setup -F @pi-personal/backend --",
+    "deploy:setup": "bunx vercel link",
+    "dev:vercel": "bunx vercel dev -L",
+    "env:preview": "tsx scripts/sync-vercel-env.ts preview",
+    "env:production": "tsx scripts/sync-vercel-env.ts production",
+    "deploy": "bunx vercel deploy",
+    "deploy:prod": "bunx vercel deploy --prod",
+    "deploy:check": "bunx vercel deploy --dry",
+    "env:generate": "varlock codegen --path ./apps/web/",
+    "postinstall": "varlock codegen --path ./apps/web/",
+    "check": "ultracite check",
+    "fix": "ultracite fix"
+  },
+  "dependencies": {
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.15",
+    "@pi-personal/config": "workspace:*",
+    "@types/node": "catalog:",
+    "lefthook": "latest",
+    "tsx": "^4.23.13",
+    "turbo": "^2.11.7",
+    "typescript": "catalog:",
+    "ultracite": "8.0.0",
+    "varlock": "catalog:"
+  },
+  "packageManager": "bun@1.4.4"
+}
