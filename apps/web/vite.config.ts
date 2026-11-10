@@ -6,21 +6,21 @@ import { nitro } from "nitro/vite";
 import { defineConfig } from "vite";
 
 export default defineConfig({
-  server: {
-    port: 3001,
-  },
-  resolve: {
-    tsconfigPaths: true,
-  },
-  plugins: [
-    varlockVitePlugin({ ssrInjectMode: "resolved-env" }),
-    tailwindcss(),
-    tanstackStart(),
-    nitro(),
-    viteReact(),
-  ],
-  // These deployments run the standalone build artifact.
-  ssr: {
-    noExternal: true,
-  },
+	server: {
+		port: 3001,
+	},
+	resolve: {
+		tsconfigPaths: true,
+	},
+	plugins: [
+		varlockVitePlugin({ ssrInjectMode: "resolved-env" }),
+		tailwindcss(),
+		tanstackStart(),
+		nitro(),
+		viteReact(),
+	],
+	// These deployments run the standalone build artifact.
+	ssr: {
+		noExternal: true,
+	},
 });

@@ -4,10 +4,10 @@
   "type": "module",
   "scripts": {
     "build": "vite build",
-    "serve": "vite preview",
-    "dev": "vite dev",
     "check-types": "vite build && tsc --noEmit",
-    "env:generate": "varlock codegen"
+    "dev": "vite dev",
+    "env:generate": "varlock codegen",
+    "serve": "vite preview"
   },
   "dependencies": {
     "@convex-dev/better-auth": "catalog:",

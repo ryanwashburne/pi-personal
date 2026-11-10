@@ -1,6 +1,7 @@
 {
   "name": "pi-personal",
   "private": true,
+  "type": "module",
   "workspaces": {
     "packages": [
       "apps/*",
@@ -19,31 +20,30 @@
       "@convex-dev/better-auth": "^0.12.5"
     }
   },
-  "type": "module",
   "scripts": {
-    "dev": "turbo run dev --filter='!sprite'",
     "build": "turbo run build --filter='!desktop' && turbo run build -F desktop",
-    "check-types": "turbo run check-types",
-    "test": "turbo run test",
-    "dev:sprite": "turbo run dev -F sprite --",
-    "provision": "./apps/sprite/scripts/provision.sh",
-    "dev:web": "turbo run dev -F web --",
-    "dev:desktop": "turbo run dev:hmr -F desktop --",
     "build:desktop": "turbo run build:stable -F desktop --",
     "build:desktop:canary": "turbo run build:canary -F desktop --",
+    "check": "ultracite check",
+    "check-types": "turbo run check-types",
+    "deploy": "bunx vercel deploy",
+    "deploy:check": "bunx vercel deploy --dry",
+    "deploy:prod": "bunx vercel deploy --prod",
+    "deploy:setup": "bunx vercel link",
+    "dev": "turbo run dev --filter='!sprite'",
+    "dev:desktop": "turbo run dev:hmr -F desktop --",
     "dev:server": "turbo run dev -F @pi-personal/backend --",
     "dev:setup": "turbo run dev:setup -F @pi-personal/backend --",
-    "deploy:setup": "bunx vercel link",
+    "dev:sprite": "turbo run dev -F sprite --",
     "dev:vercel": "bunx vercel dev -L",
+    "dev:web": "turbo run dev -F web --",
+    "env:generate": "varlock codegen --path ./apps/web/",
     "env:preview": "tsx scripts/sync-vercel-env.ts preview",
     "env:production": "tsx scripts/sync-vercel-env.ts production",
-    "deploy": "bunx vercel deploy",
-    "deploy:prod": "bunx vercel deploy --prod",
-    "deploy:check": "bunx vercel deploy --dry",
-    "env:generate": "varlock codegen --path ./apps/web/",
+    "fix": "ultracite fix",
     "postinstall": "varlock codegen --path ./apps/web/",
-    "check": "ultracite check",
-    "fix": "ultracite fix"
+    "provision": "./apps/sprite/scripts/provision.sh",
+    "test": "turbo run test"
   },
   "dependencies": {
     "zod": "catalog:"
