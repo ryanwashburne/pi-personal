@@ -15,7 +15,22 @@ local.db-*
 
 # Environment variables
 .env
+.env.*
 .env*.local
+!.env.example
+!.env.schema
+*.pem
+*.key
+
+# Pre-monorepo paths: secrets left here after a pull must never be committed.
+# They now live under apps/sprite (see apps/sprite/.gitignore).
+/agent/
+/src/
+/browser-bin/
+/tailscale-state/
+/.sprite
+/.sprites/
+/.pi/
 
 # IDEs and editors
 .vscode/*
